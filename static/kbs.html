@@ -33,6 +33,15 @@
           <input type="file" class="form-control" @change="onFileChange" accept=".txt,.md" />
           <button class="btn btn-primary" @click="uploadFile">Upload File</button>
         </div>
+        <div class="mb-3">
+          <div class="border rounded p-3 text-center"
+            :class="{'bg-info bg-opacity-25': isDragging}"
+            @dragover.prevent="isDragging = true"
+            @dragleave="isDragging = false"
+            @drop.prevent="handleDrop">
+            Drag &amp; drop .txt or .md file here
+          </div>
+        </div>
         <h3>Files</h3>
         <ul class="list-group">
           <li v-for="file in files" :key="file" class="list-group-item">{{ file }}</li>
@@ -50,6 +59,7 @@
           selectedKB: null,
           files: [],
           selectedFile: null,
+          isDragging: false,
         };
       },
       mounted() {
@@ -88,6 +98,14 @@
           await fetch(`/api/kbs/${this.selectedKB.id}/files`, { method: 'POST', body: form });
           this.selectedFile = null;
           this.fetchFiles();
+        },
+        handleDrop(event) {
+          this.isDragging = false;
+          const files = event.dataTransfer.files;
+          if (files && files.length > 0) {
+            this.selectedFile = files[0];
+            this.uploadFile();
+          }
         },
       }
     }).mount('#app');

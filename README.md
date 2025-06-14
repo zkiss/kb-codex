@@ -11,7 +11,7 @@ The server will start at the specified address (default is `:8080`).
 ## Knowledge Bases
 
 - Create and list knowledge bases, upload `.txt`/`.md` files, and store chunk embeddings in the vector DB.
-- A simple web UI is available at `/kbs.html`.
+- A simple web UI is available at `/kbs.html` which supports drag-and-drop file uploads.
 
 ### API Endpoints
 
