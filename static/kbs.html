@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Bases - KB Codex</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    form, .kb-list, .file-list { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Knowledge Bases</h1>
+  <ul id="kb-list"></ul>
+  <form id="create-kb-form">
+    <input type="text" id="kb-name" placeholder="New KB name" required />
+    <button type="submit">Create KB</button>
+  </form>
+  <div id="upload-section" style="display:none;">
+    <h2 id="upload-title"></h2>
+    <input type="file" id="file-input" accept=".txt,.md" />
+    <button id="upload-btn">Upload File</button>
+    <h3>Files</h3>
+    <ul id="file-list"></ul>
+  </div>
+  <script>
+    const kbListEl = document.getElementById('kb-list');
+    const createForm = document.getElementById('create-kb-form');
+    const kbNameInput = document.getElementById('kb-name');
+    const uploadSection = document.getElementById('upload-section');
+    const uploadTitle = document.getElementById('upload-title');
+    const fileInput = document.getElementById('file-input');
+    const uploadBtn = document.getElementById('upload-btn');
+    const fileListEl = document.getElementById('file-list');
+    let selectedKB = null;
+
+    async function fetchKBs() {
+      const res = await fetch('/api/kbs');
+      const kbs = await res.json();
+      kbListEl.innerHTML = '';
+      kbs.forEach(kb => {
+        const li = document.createElement('li');
+        li.textContent = kb.name;
+        li.style.cursor = 'pointer';
+        li.onclick = () => selectKB(kb);
+        kbListEl.appendChild(li);
+      });
+    }
+
+    async function selectKB(kb) {
+      selectedKB = kb;
+      uploadTitle.textContent = 'Upload to ' + kb.name;
+      uploadSection.style.display = 'block';
+      await fetchFiles();
+    }
+
+    async function fetchFiles() {
+      if (!selectedKB) return;
+      const res = await fetch(`/api/kbs/${selectedKB.id}/files`);
+      const files = await res.json();
+      fileListEl.innerHTML = '';
+      files.forEach(fn => {
+        const li = document.createElement('li');
+        li.textContent = fn;
+        fileListEl.appendChild(li);
+      });
+    }
+
+    createForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const name = kbNameInput.value.trim();
+      if (!name) return;
+      await fetch('/api/kbs', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name})
+      });
+      kbNameInput.value = '';
+      fetchKBs();
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      if (!selectedKB) return alert('Select a KB first');
+      const file = fileInput.files[0];
+      if (!file) return alert('Choose a file');
+      const form = new FormData();
+      form.append('file', file);
+      await fetch(`/api/kbs/${selectedKB.id}/files`, { method: 'POST', body: form });
+      fileInput.value = '';
+      fetchFiles();
+    });
+
+    fetchKBs();
+  </script>
+</body>
+</html>

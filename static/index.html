@@ -52,6 +52,7 @@
       if (resp.ok) {
         localStorage.setItem('kb_jwt', data.token);
         alert('Login successful');
+        window.location.href = '/kbs.html';
       } else {
         alert('Login failed: ' + (data.error || resp.statusText));
       }
