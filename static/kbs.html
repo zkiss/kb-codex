@@ -2,94 +2,95 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knowledge Bases - KB Codex</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    form, .kb-list, .file-list { margin-bottom: 20px; }
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
 <body>
-  <h1>Knowledge Bases</h1>
-  <ul id="kb-list"></ul>
-  <form id="create-kb-form">
-    <input type="text" id="kb-name" placeholder="New KB name" required />
-    <button type="submit">Create KB</button>
-  </form>
-  <div id="upload-section" style="display:none;">
-    <h2 id="upload-title"></h2>
-    <input type="file" id="file-input" accept=".txt,.md" />
-    <button id="upload-btn">Upload File</button>
-    <h3>Files</h3>
-    <ul id="file-list"></ul>
+  <div id="app">
+    <nav class="navbar navbar-light bg-light mb-4">
+      <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">KB Codex</span>
+      </div>
+    </nav>
+    <div class="container">
+      <h1 class="mb-4">Knowledge Bases</h1>
+      <ul class="list-group mb-4">
+        <li v-for="kb in kbs" :key="kb.id" class="list-group-item list-group-item-action" @click="selectKB(kb)">{{ kb.name }}</li>
+      </ul>
+      <form @submit.prevent="createKB" class="row g-2 mb-4">
+        <div class="col-auto flex-grow-1">
+          <input v-model="newKBName" type="text" class="form-control" placeholder="New KB name" required />
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-success">Create KB</button>
+        </div>
+      </form>
+      <div v-if="selectedKB" class="mb-5">
+        <h2 class="mb-3">Upload to {{ selectedKB.name }}</h2>
+        <div class="input-group mb-3">
+          <input type="file" class="form-control" @change="onFileChange" accept=".txt,.md" />
+          <button class="btn btn-primary" @click="uploadFile">Upload File</button>
+        </div>
+        <h3>Files</h3>
+        <ul class="list-group">
+          <li v-for="file in files" :key="file" class="list-group-item">{{ file }}</li>
+        </ul>
+      </div>
+    </div>
   </div>
   <script>
-    const kbListEl = document.getElementById('kb-list');
-    const createForm = document.getElementById('create-kb-form');
-    const kbNameInput = document.getElementById('kb-name');
-    const uploadSection = document.getElementById('upload-section');
-    const uploadTitle = document.getElementById('upload-title');
-    const fileInput = document.getElementById('file-input');
-    const uploadBtn = document.getElementById('upload-btn');
-    const fileListEl = document.getElementById('file-list');
-    let selectedKB = null;
-
-    async function fetchKBs() {
-      const res = await fetch('/api/kbs');
-      const kbs = await res.json();
-      kbListEl.innerHTML = '';
-      kbs.forEach(kb => {
-        const li = document.createElement('li');
-        li.textContent = kb.name;
-        li.style.cursor = 'pointer';
-        li.onclick = () => selectKB(kb);
-        kbListEl.appendChild(li);
-      });
-    }
-
-    async function selectKB(kb) {
-      selectedKB = kb;
-      uploadTitle.textContent = 'Upload to ' + kb.name;
-      uploadSection.style.display = 'block';
-      await fetchFiles();
-    }
-
-    async function fetchFiles() {
-      if (!selectedKB) return;
-      const res = await fetch(`/api/kbs/${selectedKB.id}/files`);
-      const files = await res.json();
-      fileListEl.innerHTML = '';
-      files.forEach(fn => {
-        const li = document.createElement('li');
-        li.textContent = fn;
-        fileListEl.appendChild(li);
-      });
-    }
-
-    createForm.addEventListener('submit', async e => {
-      e.preventDefault();
-      const name = kbNameInput.value.trim();
-      if (!name) return;
-      await fetch('/api/kbs', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({name})
-      });
-      kbNameInput.value = '';
-      fetchKBs();
-    });
-
-    uploadBtn.addEventListener('click', async () => {
-      if (!selectedKB) return alert('Select a KB first');
-      const file = fileInput.files[0];
-      if (!file) return alert('Choose a file');
-      const form = new FormData();
-      form.append('file', file);
-      await fetch(`/api/kbs/${selectedKB.id}/files`, { method: 'POST', body: form });
-      fileInput.value = '';
-      fetchFiles();
-    });
-
-    fetchKBs();
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          kbs: [],
+          newKBName: '',
+          selectedKB: null,
+          files: [],
+          selectedFile: null,
+        };
+      },
+      mounted() {
+        this.fetchKBs();
+      },
+      methods: {
+        async fetchKBs() {
+          const res = await fetch('/api/kbs');
+          this.kbs = await res.json();
+        },
+        async createKB() {
+          await fetch('/api/kbs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: this.newKBName }),
+          });
+          this.newKBName = '';
+          this.fetchKBs();
+        },
+        selectKB(kb) {
+          this.selectedKB = kb;
+          this.fetchFiles();
+        },
+        async fetchFiles() {
+          if (!this.selectedKB) return;
+          const res = await fetch(`/api/kbs/${this.selectedKB.id}/files`);
+          this.files = await res.json();
+        },
+        onFileChange(event) {
+          this.selectedFile = event.target.files[0];
+        },
+        async uploadFile() {
+          if (!this.selectedKB || !this.selectedFile) return;
+          const form = new FormData();
+          form.append('file', this.selectedFile);
+          await fetch(`/api/kbs/${this.selectedKB.id}/files`, { method: 'POST', body: form });
+          this.selectedFile = null;
+          this.fetchFiles();
+        },
+      }
+    }).mount('#app');
   </script>
 </body>
 </html>
