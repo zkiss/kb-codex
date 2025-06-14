@@ -37,6 +37,12 @@
         <ul class="list-group">
           <li v-for="file in files" :key="file" class="list-group-item">{{ file }}</li>
         </ul>
+        <h2 class="mt-4">Ask a question</h2>
+        <div class="input-group mb-3">
+          <input v-model="question" type="text" class="form-control" placeholder="Type your question" />
+          <button class="btn btn-primary" @click="askQuestion">Ask</button>
+        </div>
+        <div v-if="answer" class="alert alert-secondary">{{ answer }}</div>
       </div>
     </div>
   </div>
@@ -50,6 +56,8 @@
           selectedKB: null,
           files: [],
           selectedFile: null,
+          question: '',
+          answer: '',
         };
       },
       mounted() {
@@ -88,6 +96,16 @@
           await fetch(`/api/kbs/${this.selectedKB.id}/files`, { method: 'POST', body: form });
           this.selectedFile = null;
           this.fetchFiles();
+        },
+        async askQuestion() {
+          if (!this.selectedKB || !this.question) return;
+          const resp = await fetch(`/api/kbs/${this.selectedKB.id}/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: this.question })
+          });
+          const data = await resp.json();
+          this.answer = data.answer || 'No answer';
         },
       }
     }).mount('#app');

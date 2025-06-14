@@ -170,3 +170,85 @@ func (h *KBHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"chunks": len(chunks)})
 }
+
+// questionRequest represents a question about a knowledge base.
+type questionRequest struct {
+	Question string `json:"question"`
+}
+
+// questionResponse represents the answer returned to the client.
+type questionResponse struct {
+	Answer string `json:"answer"`
+}
+
+// AskQuestion handles POST /api/kbs/{kbID}/ask
+func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
+	kbIDStr := chi.URLParam(r, "kbID")
+	kbID, err := strconv.ParseInt(kbIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid kb ID", http.StatusBadRequest)
+		return
+	}
+	var req questionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Question == "" {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	embReq := go_openai.EmbeddingRequest{
+		Model: go_openai.AdaEmbeddingV2,
+		Input: []string{req.Question},
+	}
+	embResp, err := h.OpenAI.CreateEmbeddings(ctx, embReq)
+	if err != nil {
+		http.Error(w, "embedding failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	vec := embResp.Data[0].Embedding
+	parts := make([]string, len(vec))
+	for i, v := range vec {
+		parts[i] = fmt.Sprintf("%f", v)
+	}
+	arrLit := "[" + strings.Join(parts, ",") + "]"
+
+	rows, err := h.DB.QueryContext(ctx,
+		`SELECT content FROM chunks WHERE kb_id=$1 ORDER BY embedding <-> $2::vector LIMIT 5`,
+		kbID, arrLit,
+	)
+	if err != nil {
+		http.Error(w, "search failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var contextParts []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			http.Error(w, "search failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		contextParts = append(contextParts, c)
+	}
+
+	prompt := fmt.Sprintf("Answer the question based on the following context:\n\n%s\n\nQuestion: %s",
+		strings.Join(contextParts, "\n---\n"), req.Question)
+
+	chatReq := go_openai.ChatCompletionRequest{
+		Model: go_openai.GPT3Dot5Turbo,
+		Messages: []go_openai.ChatCompletionMessage{
+			{Role: "system", Content: "You are a helpful assistant."},
+			{Role: "user", Content: prompt},
+		},
+	}
+	chatResp, err := h.OpenAI.CreateChatCompletion(ctx, chatReq)
+	if err != nil {
+		http.Error(w, "openai failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	answer := chatResp.Choices[0].Message.Content
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(questionResponse{Answer: answer})
+}

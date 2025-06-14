@@ -36,6 +36,7 @@ func main() {
 	r.Post("/api/kbs", kbHandler.CreateKB)
 	r.Get("/api/kbs/{kbID}/files", kbHandler.ListFiles)
 	r.Post("/api/kbs/{kbID}/files", kbHandler.UploadFile)
+	r.Post("/api/kbs/{kbID}/ask", kbHandler.AskQuestion)
 
 	// Serve static files
 	fileServer := http.FileServer(http.Dir("static"))
