@@ -21,6 +21,7 @@ The server will start at the specified address (default is `:8080`).
 | POST   | `/api/kbs`                   | Create a new knowledge base (`{name}`)    |
 | GET    | `/api/kbs/{kbID}/files`      | List uploaded files in a KB               |
 | POST   | `/api/kbs/{kbID}/files`      | Upload `.txt`/`.md` file and index chunks |
+| POST   | `/api/kbs/{kbID}/ask`        | Ask a question about a KB (`{question}`) |
 
 Set the `OPENAI_API_KEY` environment variable to enable embeddings.
 
