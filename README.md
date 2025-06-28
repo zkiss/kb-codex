@@ -11,7 +11,9 @@ The server will start at the specified address (default is `:8080`).
 ## Knowledge Bases
 
 - Create and list knowledge bases, upload `.txt`/`.md` files, and store chunk embeddings in the vector DB.
-- A simple web UI is available at `/kbs.html`.
+- A single-page React UI is available at the root path. It uses semantic routes
+  like `/login`, `/register`, `/kbs`, and `/kbs/<kb-id>` when viewing a specific
+  knowledge base.
 
 ### API Endpoints
 
