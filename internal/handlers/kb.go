@@ -177,8 +177,15 @@ type questionRequest struct {
 }
 
 // questionResponse represents the answer returned to the client.
+type questionChunk struct {
+	FileName string `json:"file_name"`
+	Index    int    `json:"index"`
+	Content  string `json:"content"`
+}
+
 type questionResponse struct {
-	Answer string `json:"answer"`
+	Answer string          `json:"answer"`
+	Chunks []questionChunk `json:"chunks"`
 }
 
 // AskQuestion handles POST /api/kbs/{kbID}/ask
@@ -213,7 +220,7 @@ func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	arrLit := "[" + strings.Join(parts, ",") + "]"
 
 	rows, err := h.DB.QueryContext(ctx,
-		`SELECT content FROM chunks WHERE kb_id=$1 ORDER BY embedding <-> $2::vector LIMIT 5`,
+		`SELECT file_name, chunk_index, content FROM chunks WHERE kb_id=$1 ORDER BY embedding <-> $2::vector LIMIT 5`,
 		kbID, arrLit,
 	)
 	if err != nil {
@@ -223,13 +230,15 @@ func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	var contextParts []string
+	var chunks []questionChunk
 	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
+		var c questionChunk
+		if err := rows.Scan(&c.FileName, &c.Index, &c.Content); err != nil {
 			http.Error(w, "search failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		contextParts = append(contextParts, c)
+		contextParts = append(contextParts, c.Content)
+		chunks = append(chunks, c)
 	}
 
 	prompt := fmt.Sprintf("Answer the question based on the following context:\n\n%s\n\nQuestion: %s",
@@ -250,5 +259,5 @@ func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	answer := chatResp.Choices[0].Message.Content
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(questionResponse{Answer: answer})
+	json.NewEncoder(w).Encode(questionResponse{Answer: answer, Chunks: chunks})
 }
