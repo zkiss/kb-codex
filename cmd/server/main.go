@@ -29,6 +29,10 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
+	// Serve static assets like app.js
+	fs := http.FileServer(http.Dir("static"))
+	r.Handle("/static/*", http.StripPrefix("/static/", fs))
+
 	r.Post("/api/register", authHandler.Register)
 	r.Post("/api/login", authHandler.Login)
 
