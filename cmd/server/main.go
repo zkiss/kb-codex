@@ -38,9 +38,16 @@ func main() {
 	r.Post("/api/kbs/{kbID}/files", kbHandler.UploadFile)
 	r.Post("/api/kbs/{kbID}/ask", kbHandler.AskQuestion)
 
-	// Serve static files
-	fileServer := http.FileServer(http.Dir("static"))
-	r.Handle("/*", fileServer)
+	// Serve SPA
+	r.Get("/index.html", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/index.html")
+	})
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/index.html")
+	})
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/index.html")
+	})
 
 	log.Printf("Starting server on %s", cfg.Addr)
 	if err := http.ListenAndServe(cfg.Addr, r); err != nil {
