@@ -3,47 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login - KB Codex</title>
+  <title>KB Codex</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body class="bg-light">
-  <div id="app">
-    <div class="container">
-      <div class="row justify-content-center align-items-center vh-100">
-        <div class="col-md-4">
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <h2 class="card-title text-center mb-4">KB Codex</h2>
-              <form @submit.prevent="login">
-                <div class="mb-3">
-                  <label for="email" class="form-label">Email address</label>
-                  <input v-model="email" type="email" class="form-control" id="email" placeholder="Enter email" required>
-                </div>
-                <div class="mb-3">
-                  <label for="password" class="form-label">Password</label>
-                  <input v-model="password" type="password" class="form-control" id="password" placeholder="Password" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Login</button>
-              </form>
-              <p class="text-center mt-3">
-                <a href="/register.html">Don't have an account? Register</a>
-              </p>
-              <div v-if="error" class="alert alert-danger mt-3" role="alert">
-                {{ error }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
   <script>
-    const { createApp } = Vue;
-    createApp({
-      data() {
-        return { email: '', password: '', error: '' };
-      },
+    const Login = {
+      template: `\
+<div class="container">\
+  <div class="row justify-content-center align-items-center vh-100">\
+    <div class="col-md-4">\
+      <div class="card shadow-sm">\
+        <div class="card-body">\
+          <h2 class="card-title text-center mb-4">KB Codex</h2>\
+          <form @submit.prevent="login">\
+            <div class="mb-3">\
+              <label for="email" class="form-label">Email address</label>\
+              <input v-model="email" type="email" class="form-control" id="email" placeholder="Enter email" required>\
+            </div>\
+            <div class="mb-3">\
+              <label for="password" class="form-label">Password</label>\
+              <input v-model="password" type="password" class="form-control" id="password" placeholder="Password" required>\
+            </div>\
+            <button type="submit" class="btn btn-primary w-100">Login</button>\
+          </form>\
+          <p class="text-center mt-3">\
+            <router-link to="/register">Don't have an account? Register</router-link>\
+          </p>\
+          <div v-if="error" class="alert alert-danger mt-3" role="alert">\
+            {{ error }}\
+          </div>\
+        </div>\
+      </div>\
+    </div>\
+  </div>\
+</div>`,
+      data() { return { email: '', password: '', error: '' }; },
       methods: {
         async login() {
           this.error = '';
@@ -51,7 +51,7 @@
             const resp = await fetch('/api/login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: this.email, password: this.password }),
+              body: JSON.stringify({ email: this.email, password: this.password })
             });
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok) {
@@ -59,13 +59,205 @@
               return;
             }
             localStorage.setItem('kb_jwt', data.token);
-            window.location.href = '/kbs.html';
+            this.$router.push('/kbs');
           } catch (err) {
             this.error = err.message;
           }
         }
       }
-    }).mount('#app');
+    };
+
+    const Register = {
+      template: `\
+<div class="container">\
+  <div class="row justify-content-center align-items-center vh-100">\
+    <div class="col-md-4">\
+      <div class="card shadow-sm">\
+        <div class="card-body">\
+          <h2 class="card-title text-center mb-4">Register</h2>\
+          <form @submit.prevent="register">\
+            <div class="mb-3">\
+              <label for="email" class="form-label">Email address</label>\
+              <input v-model="email" type="email" class="form-control" id="email" placeholder="Enter email" required>\
+            </div>\
+            <div class="mb-3">\
+              <label for="password" class="form-label">Password</label>\
+              <input v-model="password" type="password" class="form-control" id="password" placeholder="Password" required>\
+            </div>\
+            <button type="submit" class="btn btn-success w-100">Register</button>\
+          </form>\
+          <p class="text-center mt-3">\
+            <router-link to="/login">Already have an account? Login</router-link>\
+          </p>\
+          <div v-if="error" class="alert alert-danger mt-3" role="alert">\
+            {{ error }}\
+          </div>\
+        </div>\
+      </div>\
+    </div>\
+  </div>\
+</div>`,
+      data() { return { email: '', password: '', error: '' }; },
+      methods: {
+        async register() {
+          this.error = '';
+          try {
+            const resp = await fetch('/api/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: this.email, password: this.password })
+            });
+            if (!resp.ok) {
+              const data = await resp.json().catch(() => ({}));
+              this.error = data.error || resp.statusText;
+              return;
+            }
+            alert('Registration successful, please login');
+            this.$router.push('/login');
+          } catch (err) {
+            this.error = err.message;
+          }
+        }
+      }
+    };
+
+    const KBList = {
+      template: `\
+<div class="container">\
+  <nav class="navbar navbar-light bg-light mb-4">\
+    <div class="container-fluid">\
+      <span class="navbar-brand mb-0 h1">KB Codex</span>\
+    </div>\
+  </nav>\
+  <div class="mb-4">\
+    <h1 class="mb-4">Knowledge Bases</h1>\
+    <ul class="list-group mb-4">\
+      <li v-for="kb in kbs" :key="kb.id" class="list-group-item">\
+        <router-link :to="'/kb/' + kb.id">{{ kb.name }}</router-link>\
+      </li>\
+    </ul>\
+    <form @submit.prevent="createKB" class="row g-2 mb-4">\
+      <div class="col-auto flex-grow-1">\
+        <input v-model="newKBName" type="text" class="form-control" placeholder="New KB name" required />\
+      </div>\
+      <div class="col-auto">\
+        <button type="submit" class="btn btn-success">Create KB</button>\
+      </div>\
+    </form>\
+  </div>\
+</div>`,
+      data() { return { kbs: [], newKBName: '' }; },
+      mounted() { this.fetchKBs(); },
+      methods: {
+        async fetchKBs() {
+          const res = await fetch('/api/kbs');
+          this.kbs = await res.json();
+        },
+        async createKB() {
+          await fetch('/api/kbs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: this.newKBName })
+          });
+          this.newKBName = '';
+          this.fetchKBs();
+        }
+      }
+    };
+
+    const KBDetail = {
+      props: ['id'],
+      template: `\
+<div class="container mb-5">\
+  <button class="btn btn-link mb-3" @click="$router.push('/kbs')"><i class="bi bi-arrow-left"></i> Back to list</button>\
+  <h2 class="mb-3">Upload to {{ kb.name }}</h2>\
+  <div class="input-group mb-3">\
+    <input type="file" class="form-control" @change="onFileChange" accept=".txt,.md" />\
+    <button class="btn btn-primary" @click="uploadFile">Upload File</button>\
+  </div>\
+  <h3>Files</h3>\
+  <ul class="list-group">\
+    <li v-for="file in files" :key="file" class="list-group-item">{{ file }}</li>\
+  </ul>\
+  <h2 class="mt-4">Ask a question</h2>\
+  <div class="input-group mb-3">\
+    <input v-model="question" type="text" class="form-control" placeholder="Type your question" @keyup.enter="askQuestion" :disabled="loading" />\
+    <button class="btn btn-primary" @click="askQuestion" :disabled="loading">\
+      <span v-if="loading" class="spinner-border spinner-border-sm"></span>\
+      <span v-else>Ask</span>\
+    </button>\
+  </div>\
+  <div v-if="answer" class="card mt-3">\
+    <div class="card-body">\
+      <div v-html="answerHtml"></div>\
+      <button class="btn btn-sm btn-link mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#ctx" aria-expanded="false">\
+        <i class="bi bi-info-circle"></i> Show context\
+      </button>\
+      <div class="collapse" id="ctx">\
+        <ul class="list-group mt-2">\
+          <li v-for="c in context" :key="c.file_name + '-' + c.index" class="list-group-item">\
+            <strong>{{ c.file_name }} [{{ c.index }}]</strong>\
+            <pre class="mt-2 mb-0">{{ c.content }}</pre>\
+          </li>\
+        </ul>\
+      </div>\
+    </div>\
+  </div>\
+</div>`,
+      data() { return { kb: {}, files: [], selectedFile: null, question: '', answer: '', answerHtml: '', context: [], loading: false }; },
+      mounted() { this.fetchKB(); this.fetchFiles(); },
+      watch: { id(){ this.fetchKB(); this.fetchFiles(); } },
+      methods: {
+        async fetchKB() {
+          const res = await fetch('/api/kbs');
+          const all = await res.json();
+          this.kb = all.find(k => k.id === parseInt(this.id)) || { id: this.id, name: 'KB '+this.id };
+        },
+        async fetchFiles() {
+          const res = await fetch(`/api/kbs/${this.id}/files`);
+          this.files = await res.json();
+        },
+        onFileChange(e) { this.selectedFile = e.target.files[0]; },
+        async uploadFile() {
+          if (!this.selectedFile) return;
+          const form = new FormData();
+          form.append('file', this.selectedFile);
+          await fetch(`/api/kbs/${this.id}/files`, { method: 'POST', body: form });
+          this.selectedFile = null;
+          this.fetchFiles();
+        },
+        async askQuestion() {
+          if (!this.question || this.loading) return;
+          this.loading = true;
+          this.answer = '';
+          this.answerHtml = '';
+          this.context = [];
+          const resp = await fetch(`/api/kbs/${this.id}/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: this.question })
+          });
+          const data = await resp.json();
+          this.answer = data.answer || 'No answer';
+          this.answerHtml = marked.parse(this.answer);
+          this.context = data.chunks || [];
+          this.loading = false;
+        }
+      }
+    };
+
+    const routes = [
+      { path: '/', redirect: '/login' },
+      { path: '/login', component: Login },
+      { path: '/register', component: Register },
+      { path: '/kbs', component: KBList },
+      { path: '/kb/:id', component: KBDetail, props: true }
+    ];
+    const router = VueRouter.createRouter({ history: VueRouter.createWebHistory(), routes });
+    const app = Vue.createApp({});
+    app.use(router);
+    app.mount('#app');
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
