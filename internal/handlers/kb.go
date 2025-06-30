@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -18,13 +19,22 @@ import (
 )
 
 // KBHandler provides endpoints for managing knowledge bases and file uploads.
+// AIClient defines the subset of the OpenAI client used by the handler. It
+// allows injecting a fake implementation in tests so no real network calls are
+// made.
+type AIClient interface {
+	CreateEmbeddings(ctx context.Context, req go_openai.EmbeddingRequestConverter) (go_openai.EmbeddingResponse, error)
+	CreateChatCompletion(ctx context.Context, req go_openai.ChatCompletionRequest) (go_openai.ChatCompletionResponse, error)
+}
+
+// KBHandler provides endpoints for managing knowledge bases and file uploads.
 type KBHandler struct {
 	DB     *sql.DB
-	OpenAI *go_openai.Client
+	OpenAI AIClient
 }
 
 // NewKBHandler constructs a KBHandler instance.
-func NewKBHandler(db *sql.DB, openaiClient *go_openai.Client) *KBHandler {
+func NewKBHandler(db *sql.DB, openaiClient AIClient) *KBHandler {
 	return &KBHandler{DB: db, OpenAI: openaiClient}
 }
 
