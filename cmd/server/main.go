@@ -11,7 +11,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("could not load config: %v", err)
+	}
 
 	openaiClient := go_openai.NewClient(cfg.OpenAIAPIKey)
 	dbConn, router, err := app.New(app.Dependencies{
@@ -24,8 +27,8 @@ func main() {
 	}
 	defer dbConn.Close()
 
-	log.Printf("Starting server on %s", cfg.Addr)
-	if err := http.ListenAndServe(cfg.Addr, router); err != nil {
+	log.Printf("Starting server on %s", cfg.Port)
+	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
 		log.Fatalf("could not start server: %v", err)
 	}
 }

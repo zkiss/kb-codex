@@ -1,23 +1,24 @@
 package config
 
 import (
-	"flag"
 	"fmt"
 	"os"
 )
 
 // Config holds configuration settings for the application.
 type Config struct {
-	Addr         string
+	Port         string
 	DatabaseURL  string
 	JWTSecret    string
 	OpenAIAPIKey string
 }
 
 // Load reads configuration from flags and environment variables.
-func Load() *Config {
-	addr := flag.String("addr", ":8080", "HTTP network address")
-	flag.Parse()
+func Load() (*Config, error) {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -33,13 +34,13 @@ func Load() *Config {
 
 	openAIKey := os.Getenv("OPENAI_API_KEY")
 	if openAIKey == "" {
-		fmt.Println("WARNING: OPENAI_API_KEY is not set. Embedding requests will fail.")
+		return nil, fmt.Errorf("OPENAI_API_KEY environment variable is required but not set")
 	}
 
 	return &Config{
-		Addr:         *addr,
+		Port:         port,
 		DatabaseURL:  dbURL,
 		JWTSecret:    jwtSecret,
 		OpenAIAPIKey: openAIKey,
-	}
+	}, nil
 }
