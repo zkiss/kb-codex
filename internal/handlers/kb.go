@@ -182,8 +182,14 @@ func (h *KBHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // questionRequest represents a question about a knowledge base.
+type chatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type questionRequest struct {
-	Question string `json:"question"`
+	Question string        `json:"question"`
+	History  []chatMessage `json:"history"`
 }
 
 // questionResponse represents the answer returned to the client.
@@ -196,6 +202,24 @@ type questionChunk struct {
 type questionResponse struct {
 	Answer string          `json:"answer"`
 	Chunks []questionChunk `json:"chunks"`
+}
+
+func rewriteQuestion(ctx context.Context, ai AIClient, history []chatMessage, q string) (string, error) {
+	messages := []go_openai.ChatCompletionMessage{
+		{Role: "system", Content: "Rewrite the user's question to be a standalone question using the conversation history."},
+	}
+	for _, m := range history {
+		messages = append(messages, go_openai.ChatCompletionMessage{Role: m.Role, Content: m.Content})
+	}
+	messages = append(messages, go_openai.ChatCompletionMessage{Role: "user", Content: q})
+	resp, err := ai.CreateChatCompletion(ctx, go_openai.ChatCompletionRequest{
+		Model:    go_openai.GPT3Dot5Turbo,
+		Messages: messages,
+	})
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
 // AskQuestion handles POST /api/kbs/{kbID}/ask
@@ -213,9 +237,17 @@ func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	q := req.Question
+	if len(req.History) > 0 {
+		q, err = rewriteQuestion(ctx, h.OpenAI, req.History, req.Question)
+		if err != nil {
+			http.Error(w, "question rewrite failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	embReq := go_openai.EmbeddingRequest{
 		Model: go_openai.AdaEmbeddingV2,
-		Input: []string{req.Question},
+		Input: []string{q},
 	}
 	embResp, err := h.OpenAI.CreateEmbeddings(ctx, embReq)
 	if err != nil {
