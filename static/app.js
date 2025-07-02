@@ -319,35 +319,17 @@ function KBDetail({ onLogout }) {
 
   return (
     <KBLayout onLogout={onLogout}>
-      <button className="btn btn-link mb-3" onClick={() => navigate("/kbs")}>
+      <button className="btn btn-link mb-3" onClick={() => navigate("/kbs")}> 
         <i className="bi bi-arrow-left"></i> Back to list
       </button>
-      <h2 className="mb-3">Upload to {kbName}</h2>
-      <div className="input-group mb-3">
-        <input
-          type="file"
-          className="form-control"
-          accept=".txt,.md"
-          onChange={(e) => setSelectedFile(e.target.files[0])}
-        />
-        <button className="btn btn-primary" onClick={uploadFile}>
-          Upload File
-        </button>
-      </div>
-      <h3>Files</h3>
-      <ul className="list-group">
-        {files.map((file) => (
-          <li key={file} className="list-group-item">
-            {file}
-          </li>
-        ))}
-      </ul>
-      <h2 className="mt-4">Ask a question</h2>
-      <div className="mb-3" style={{ maxHeight: "300px", overflowY: "auto" }}>
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={
+      <div className="row">
+        <div className="col-md-8 col-lg-9 order-2 order-md-1">
+          <h2 className="mb-3">Chat with {kbName}</h2>
+          <div className="mb-3" style={{ height: "60vh", overflowY: "auto" }}>
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={
               "d-flex mb-2 " +
               (m.role === "user"
                 ? "justify-content-end"
@@ -403,29 +385,52 @@ function KBDetail({ onLogout }) {
             </div>
           </div>
         ))}
-      </div>
-      <div className="input-group mb-3">
-        <input
-          ref={inputRef}
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          type="text"
-          className="form-control"
-          placeholder="Type your question"
-          onKeyUp={(e) => (e.key === "Enter" ? askQuestion() : null)}
-          disabled={loading}
-        />
-        <button
-          className="btn btn-primary"
-          onClick={askQuestion}
-          disabled={loading}
-        >
-          {loading ? (
-            <span className="spinner-border spinner-border-sm"></span>
-          ) : (
-            "Ask"
-          )}
-        </button>
+          </div>
+          <div className="input-group mb-3">
+            <input
+              ref={inputRef}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              type="text"
+              className="form-control"
+              placeholder="Type your question"
+              onKeyUp={(e) => (e.key === "Enter" ? askQuestion() : null)}
+              disabled={loading}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={askQuestion}
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="spinner-border spinner-border-sm"></span>
+              ) : (
+                "Ask"
+              )}
+            </button>
+          </div>
+        </div>
+        <div className="col-md-4 col-lg-3 order-1 order-md-2 mb-4">
+          <h4>Files</h4>
+          <ul className="list-group mb-3">
+            {files.map((file) => (
+              <li key={file} className="list-group-item">
+                {file}
+              </li>
+            ))}
+          </ul>
+          <div className="input-group">
+            <input
+              type="file"
+              className="form-control"
+              accept=".txt,.md"
+              onChange={(e) => setSelectedFile(e.target.files[0])}
+            />
+            <button className="btn btn-primary" onClick={uploadFile}>
+              Upload
+            </button>
+          </div>
+        </div>
       </div>
     </KBLayout>
   );
