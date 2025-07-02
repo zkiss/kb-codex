@@ -51,15 +51,25 @@ CREATE TABLE chunks(id SERIAL PRIMARY KEY, kb_id INTEGER, file_name TEXT, chunk_
 }
 
 type recordingAI struct {
-	emb        []float32
-	lastPrompt string
+	emb           []float32
+	lastPrompt    string
+	lastEmbInput  string
+	rewriteCalled bool
 }
 
 func (r *recordingAI) CreateEmbeddings(ctx context.Context, req go_openai.EmbeddingRequestConverter) (go_openai.EmbeddingResponse, error) {
+	conv := req.Convert()
+	if in, ok := conv.Input.([]string); ok && len(in) > 0 {
+		r.lastEmbInput = in[0]
+	}
 	return go_openai.EmbeddingResponse{Data: []go_openai.Embedding{{Embedding: r.emb}}}, nil
 }
 
 func (r *recordingAI) CreateChatCompletion(ctx context.Context, req go_openai.ChatCompletionRequest) (go_openai.ChatCompletionResponse, error) {
+	if strings.Contains(req.Messages[0].Content, "Rewrite") {
+		r.rewriteCalled = true
+		return go_openai.ChatCompletionResponse{Choices: []go_openai.ChatCompletionChoice{{Message: go_openai.ChatCompletionMessage{Content: "rewritten"}}}}, nil
+	}
 	r.lastPrompt = req.Messages[len(req.Messages)-1].Content
 	return go_openai.ChatCompletionResponse{Choices: []go_openai.ChatCompletionChoice{{Message: go_openai.ChatCompletionMessage{Content: "answer"}}}}, nil
 }
@@ -104,4 +114,32 @@ func TestAskQuestionComponent(t *testing.T) {
 	var resp map[string]any
 	assert.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
 	assert.Equal(t, "answer", resp["answer"])
+}
+
+func TestAskQuestionFollowup(t *testing.T) {
+	pg, db := setupVectorDB(t, 3)
+	defer pg.Terminate(context.Background())
+	defer db.Close()
+
+	var kbID int64
+	err := db.QueryRow(`INSERT INTO knowledge_bases(name) VALUES('kb1') RETURNING id`).Scan(&kbID)
+	if err != nil {
+		t.Fatalf("insert kb: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO chunks(kb_id,file_name,chunk_index,content,embedding) VALUES($1,'f.txt',0,'alpha',$2::vector)`, kbID, toArrayLit([]float32{1, 0, 0}))
+	if err != nil {
+		t.Fatalf("insert chunk: %v", err)
+	}
+
+	ai := &recordingAI{emb: []float32{1, 0, 0}}
+	h := NewKBHandler(db, ai)
+
+	body := `{"question":"follow?","history":[{"role":"user","content":"first"},{"role":"assistant","content":"a1"}]}`
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/kbs/%d/ask", kbID), strings.NewReader(body))
+	rr := httptest.NewRecorder()
+	h.AskQuestion(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.True(t, ai.rewriteCalled, "rewrite should be called")
+	assert.Equal(t, "rewritten", ai.lastEmbInput)
 }
