@@ -413,7 +413,7 @@ function KBDetail({ onLogout }) {
         <div className="col-md-4 col-lg-3 order-1 order-md-2 mb-4">
           <h4>Files</h4>
           <ul className="list-group mb-3">
-            {files.map((file) => (
+            {(files || []).map((file) => (
               <li key={file} className="list-group-item">
                 {file}
               </li>
