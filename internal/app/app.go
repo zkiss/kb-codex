@@ -40,6 +40,7 @@ func New(cfg *config.Config, aiClient handlers.AIClient) (*App, error) {
 	r.Get("/api/kbs", kbHandler.ListKB)
 	r.Post("/api/kbs", kbHandler.CreateKB)
 	r.Get("/api/kbs/{kbID}/files", kbHandler.ListFiles)
+	r.Get("/api/kbs/{kbID}/files/{slug}", kbHandler.GetFile)
 	r.Post("/api/kbs/{kbID}/files", kbHandler.UploadFile)
 	r.Post("/api/kbs/{kbID}/ask", kbHandler.AskQuestion)
 
