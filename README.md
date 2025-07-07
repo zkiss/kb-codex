@@ -28,10 +28,10 @@ configured to provide.
 
 ## Knowledge Bases
 
-- Create and list knowledge bases, upload `.txt`/`.md` files, and store chunk embeddings in the vector DB.
+- Create and list knowledge bases, upload `.txt`/`.md` files, view their contents in a modal viewer, and store chunk embeddings in the vector DB.
 - A single-page React UI is available at the root path. It uses semantic routes
-  like `/login`, `/register`, `/kbs`, and `/kbs/<kb-id>` when viewing a specific
-  knowledge base.
+  like `/login`, `/register`, `/kbs`, `/kbs/<kb-id>`, and `/kbs/<kb-id>/files/<slug>`
+  when viewing a specific knowledge base or file.
 
 ### API Endpoints
 
@@ -40,6 +40,7 @@ configured to provide.
 | GET    | `/api/kbs`                   | List all knowledge bases                  |
 | POST   | `/api/kbs`                   | Create a new knowledge base (`{name}`)    |
 | GET    | `/api/kbs/{kbID}/files`      | List uploaded files in a KB               |
+| GET    | `/api/kbs/{kbID}/files/{slug}` | Download file contents |
 | POST   | `/api/kbs/{kbID}/files`      | Upload `.txt`/`.md` file and index chunks |
 | POST   | `/api/kbs/{kbID}/ask`        | Ask a question about a KB (`{question}`) |
 

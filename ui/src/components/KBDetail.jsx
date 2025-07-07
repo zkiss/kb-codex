@@ -2,13 +2,15 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { marked } from "marked";
 import KBLayout from "./KBLayout";
+import FileViewer from "./FileViewer";
 
 function KBDetail({ onLogout }) {
-  const { kbID } = useParams();
+  const { kbID, slug } = useParams();
   const navigate = useNavigate();
   const [kbName, setKbName] = useState("");
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [viewFile, setViewFile] = useState(null);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -33,6 +35,17 @@ function KBDetail({ onLogout }) {
   }, [kbID]);
 
   useEffect(() => {
+    if (!slug) {
+      setViewFile(null);
+      return;
+    }
+    if (files.length > 0) {
+      const f = files.find((fi) => fi.slug === slug) || { slug, name: slug };
+      fetchFile(f);
+    }
+  }, [slug, files]);
+
+  useEffect(() => {
     inputRef.current && inputRef.current.focus();
   }, []);
 
@@ -49,6 +62,26 @@ function KBDetail({ onLogout }) {
     await fetch(`/api/kbs/${kbID}/files`, { method: "POST", body: form });
     setSelectedFile(null);
     fetchFiles();
+  };
+
+  const fetchFile = async (file) => {
+    const res = await fetch(
+      `/api/kbs/${kbID}/files/${encodeURIComponent(file.slug)}`,
+    );
+    if (res.ok) {
+      const mimeType = res.headers.get("Content-Type") || "";
+      const content = await res.text();
+      setViewFile({ name: file.name, content, mimeType });
+    }
+  };
+
+  const openFile = (file) => {
+    if (!file) return;
+    if (slug !== file.slug) {
+      navigate(`/kbs/${kbID}/files/${encodeURIComponent(file.slug)}`);
+    } else {
+      fetchFile(file);
+    }
   };
 
   const askQuestion = async () => {
@@ -74,7 +107,16 @@ function KBDetail({ onLogout }) {
 
   return (
     <KBLayout onLogout={onLogout}>
-      <button className="btn btn-link mb-3" onClick={() => navigate("/kbs")}> 
+      {viewFile && (
+        <FileViewer
+          file={viewFile}
+          onClose={() => {
+            setViewFile(null);
+            navigate(`/kbs/${kbID}`);
+          }}
+        />
+      )}
+      <button className="btn btn-link mb-3" onClick={() => navigate("/kbs")}>
         <i className="bi bi-arrow-left"></i> Back to list
       </button>
       <div className="row">
@@ -85,59 +127,62 @@ function KBDetail({ onLogout }) {
               <div
                 key={i}
                 className={
-              "d-flex mb-2 " +
-              (m.role === "user"
-                ? "justify-content-end"
-                : "justify-content-start")
-            }
-          >
-            <div
-              className={
-                "p-2 rounded-3 " +
-                (m.role === "user" ? "bg-primary text-white" : "bg-light")
-              }
-              style={{ maxWidth: "80%" }}
-            >
-              {m.role === "assistant" ? (
-                <div>
-                  <span
-                    dangerouslySetInnerHTML={{
-                      __html: marked.parse(m.content),
-                    }}
-                  ></span>
-                  {m.context && m.context.length > 0 && (
-                    <>
-                      <button
-                        className="btn btn-sm btn-link mt-2"
-                        type="button"
-                        onClick={() => setExpanded(e => ({ ...e, [i]: !e[i] }))}
-                      >
-                        <i className="bi bi-info-circle"></i> {expanded[i] ? "Hide context" : "Show context"}
-                      </button>
-                      {expanded[i] && (
-                        <ul className="list-group mt-2">
-                          {m.context.map((c) => (
-                            <li
-                              key={c.file_name + "-" + c.index}
-                              className="list-group-item"
-                            >
-                              <strong>
-                                {c.file_name} [{c.index}]
-                              </strong>
-                              <pre className="mt-2 mb-0">{c.content}</pre>
-                            </li>
-                          ))}
-                        </ul>
+                  "d-flex mb-2 " +
+                  (m.role === "user"
+                    ? "justify-content-end"
+                    : "justify-content-start")
+                }
+              >
+                <div
+                  className={
+                    "p-2 rounded-3 " +
+                    (m.role === "user" ? "bg-primary text-white" : "bg-light")
+                  }
+                  style={{ maxWidth: "80%" }}
+                >
+                  {m.role === "assistant" ? (
+                    <div>
+                      <span
+                        dangerouslySetInnerHTML={{
+                          __html: marked.parse(m.content),
+                        }}
+                      ></span>
+                      {m.context && m.context.length > 0 && (
+                        <>
+                          <button
+                            className="btn btn-sm btn-link mt-2"
+                            type="button"
+                            onClick={() =>
+                              setExpanded((e) => ({ ...e, [i]: !e[i] }))
+                            }
+                          >
+                            <i className="bi bi-info-circle"></i>{" "}
+                            {expanded[i] ? "Hide context" : "Show context"}
+                          </button>
+                          {expanded[i] && (
+                            <ul className="list-group mt-2">
+                              {m.context.map((c) => (
+                                <li
+                                  key={c.file_name + "-" + c.index}
+                                  className="list-group-item"
+                                >
+                                  <strong>
+                                    {c.file_name} [{c.index}]
+                                  </strong>
+                                  <pre className="mt-2 mb-0">{c.content}</pre>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
                       )}
-                    </>
+                    </div>
+                  ) : (
+                    m.content
                   )}
                 </div>
-              ) : (
-                m.content
-              )}
-            </div>
-          </div>
-        ))}
+              </div>
+            ))}
           </div>
           <div className="input-group mb-3">
             <input
@@ -167,8 +212,13 @@ function KBDetail({ onLogout }) {
           <h4>Files</h4>
           <ul className="list-group mb-3">
             {(files || []).map((file) => (
-              <li key={file} className="list-group-item">
-                {file}
+              <li
+                key={file.slug}
+                className="list-group-item list-group-item-action"
+                onClick={() => openFile(file)}
+                role="button"
+              >
+                {file.name}
               </li>
             ))}
           </ul>
@@ -189,4 +239,4 @@ function KBDetail({ onLogout }) {
   );
 }
 
-export default KBDetail; 
+export default KBDetail;

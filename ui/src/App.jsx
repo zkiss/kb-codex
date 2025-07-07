@@ -32,6 +32,16 @@ function App() {
           }
         />
         <Route
+          path="/kbs/:kbID/files/:slug"
+          element={
+            token ? (
+              <KBDetail onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
           path="/kbs/:kbID"
           element={
             token ? (

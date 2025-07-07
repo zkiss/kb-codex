@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -102,7 +103,7 @@ func (h *KBHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := h.DB.Query(
-		`SELECT DISTINCT file_name FROM chunks WHERE kb_id = $1 ORDER BY file_name`,
+		`SELECT file_name, lookup_name FROM files WHERE kb_id = $1 ORDER BY file_name`,
 		kbID,
 	)
 	if err != nil {
@@ -111,17 +112,55 @@ func (h *KBHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var files []string
+	type fileEntry struct {
+		Name string `json:"name"`
+		Slug string `json:"slug"`
+	}
+	var files []fileEntry
 	for rows.Next() {
-		var fname string
-		if err := rows.Scan(&fname); err != nil {
+		var fname, slug string
+		if err := rows.Scan(&fname, &slug); err != nil {
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
-		files = append(files, fname)
+		files = append(files, fileEntry{Name: fname, Slug: slug})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(files)
+}
+
+// GetFile handles GET /api/kbs/{kbID}/files/{slug}
+func (h *KBHandler) GetFile(w http.ResponseWriter, r *http.Request) {
+	kbIDStr := chi.URLParam(r, "kbID")
+	kbID, err := strconv.ParseInt(kbIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid kb ID", http.StatusBadRequest)
+		return
+	}
+	slug := chi.URLParam(r, "slug")
+	var content []byte
+	var mimeType string
+	var fileName string
+	err = h.DB.QueryRow(`SELECT file_name, content, mime_type FROM files WHERE kb_id=$1 AND lookup_name=$2`, kbID, slug).Scan(&fileName, &content, &mimeType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "server error", http.StatusInternalServerError)
+		}
+		return
+	}
+	if mimeType == "" {
+		ext := strings.ToLower(filepath.Ext(fileName))
+		switch ext {
+		case ".md":
+			mimeType = "text/markdown; charset=utf-8"
+		default:
+			mimeType = "text/plain; charset=utf-8"
+		}
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Write(content)
 }
 
 // UploadFile handles POST /api/kbs/{kbID}/files (multipart file upload)
@@ -149,8 +188,37 @@ func (h *KBHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read file", http.StatusInternalServerError)
 		return
 	}
-	content := string(contentBytes)
-	chunks := utils.ChunkText(content, 1000)
+	contentStr := string(contentBytes)
+	mimeType := header.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = mime.TypeByExtension(ext)
+	}
+
+	lookup := utils.SlugifyFileName(header.Filename)
+	if len(lookup) > 50 {
+		lookup = lookup[:50]
+	}
+	var exists int
+	err = h.DB.QueryRow(`SELECT 1 FROM files WHERE kb_id=$1 AND lookup_name=$2`, kbID, lookup).Scan(&exists)
+	if err != sql.ErrNoRows && err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	if err != sql.ErrNoRows {
+		base := lookup
+		if len(base) > 43 {
+			base = base[:43]
+		}
+		lookup = base + "-" + utils.RandomString(6)
+	}
+
+	_, err = h.DB.Exec(`INSERT INTO files(kb_id, file_name, lookup_name, mime_type, content, created_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (kb_id, lookup_name) DO UPDATE SET file_name=EXCLUDED.file_name, mime_type=EXCLUDED.mime_type, content=EXCLUDED.content, created_at=EXCLUDED.created_at`,
+		kbID, header.Filename, lookup, mimeType, contentBytes, time.Now())
+	if err != nil {
+		http.Error(w, "could not store file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	chunks := utils.ChunkText(contentStr, 1000)
 	ctx := r.Context()
 	for idx, chunk := range chunks {
 		embReq := go_openai.EmbeddingRequest{
