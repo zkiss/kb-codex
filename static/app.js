@@ -31,8 +31,8 @@ function Login({ onLogin }) {
 
   return (
     <div className="row justify-content-center align-items-center vh-100">
-      <div className="col-md-4">
-        <div className="card shadow-sm">
+      <div className="col-md-5 col-lg-4">
+        <div className="card shadow rounded-3">
           <div className="card-body">
             <h2 className="card-title text-center mb-4">KB Codex</h2>
             <form onSubmit={handleSubmit}>
@@ -112,8 +112,8 @@ function Register() {
 
   return (
     <div className="row justify-content-center align-items-center vh-100">
-      <div className="col-md-4">
-        <div className="card shadow-sm">
+      <div className="col-md-5 col-lg-4">
+        <div className="card shadow rounded-3">
           <div className="card-body">
             <h2 className="card-title text-center mb-4">Register</h2>
             <form onSubmit={handleSubmit}>
@@ -167,11 +167,11 @@ function Register() {
 function KBLayout({ children, onLogout }) {
   return (
     <div className="container my-3">
-      <nav className="navbar navbar-light bg-light mb-4">
+      <nav className="navbar navbar-dark bg-primary mb-4 rounded">
         <div className="container-fluid">
           <span className="navbar-brand mb-0 h1">KB Codex</span>
           <button
-            className="btn btn-sm btn-outline-secondary"
+            className="btn btn-sm btn-outline-light"
             onClick={onLogout}
           >
             Logout
@@ -214,11 +214,12 @@ function KBList({ onLogout }) {
         {kbs.map((kb) => (
           <li
             key={kb.id}
-            className="list-group-item list-group-item-action"
+            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
             onClick={() => navigate(`/kbs/${kb.id}`)}
             tabIndex="0"
           >
             {kb.name}
+            <i className="bi bi-chevron-right"></i>
           </li>
         ))}
       </ul>
@@ -338,7 +339,7 @@ function KBDetail({ onLogout }) {
           >
             <div
               className={
-                "p-2 rounded " +
+                "p-2 rounded-3 " +
                 (m.role === "user" ? "bg-primary text-white" : "bg-light")
               }
               style={{ maxWidth: "80%" }}
