@@ -12,15 +12,21 @@ import (
 	"github.com/zkiss/kb-codex/internal/handlers"
 )
 
-// New initializes the database, applies migrations and returns the DB connection
-// and router ready to be served.
-func New(cfg *config.Config, aiClient handlers.AIClient) (*sql.DB, http.Handler, error) {
+// App encapsulates the application state and logic.
+type App struct {
+	cfg    *config.Config
+	db     *sql.DB
+	router http.Handler
+}
+
+// New initializes the database, applies migrations and returns the App instance ready to be served.
+func New(cfg *config.Config, aiClient handlers.AIClient) (*App, error) {
 	conn, err := db.ConnectAndMigrate(cfg.DatabaseURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	authHandler := handlers.NewAuthHandler(conn, []byte(cfg.JWTSecret))
+	authHandler := handlers.NewAuthHandler(conn, cfg.JWTSecret)
 	kbHandler := handlers.NewKBHandler(conn, aiClient)
 
 	r := chi.NewRouter()
@@ -47,5 +53,14 @@ func New(cfg *config.Config, aiClient handlers.AIClient) (*sql.DB, http.Handler,
 		http.ServeFile(w, r, "static/index.html")
 	})
 
-	return conn, r, nil
+	return &App{cfg: cfg, db: conn, router: r}, nil
+}
+
+func (a *App) Close() error {
+	return a.db.Close()
+}
+
+// Listen starts the HTTP server using the provided listener function.
+func (a *App) Listen(listener func(port uint16, router http.Handler) error) error {
+	return listener(a.cfg.Port, a.router)
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -17,14 +18,17 @@ func main() {
 	}
 
 	openaiClient := go_openai.NewClient(cfg.OpenAIAPIKey)
-	dbConn, router, err := app.New(cfg, openaiClient)
+	appInstance, err := app.New(cfg, openaiClient)
 	if err != nil {
 		log.Fatalf("could not set up app: %v", err)
 	}
-	defer dbConn.Close()
+	defer appInstance.Close()
 
-	log.Printf("Starting server on %s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
+	log.Printf("Starting server on %d", cfg.Port)
+	err = appInstance.Listen(func(port uint16, router http.Handler) error {
+		return http.ListenAndServe(fmt.Sprintf(":%d", port), router)
+	})
+	if err != nil {
 		log.Fatalf("could not start server: %v", err)
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -47,21 +48,30 @@ func setupApp(t *testing.T) *testApp {
 	}
 
 	ai := &fakeAI{emb: make([]float32, 1536)}
-	conn, router, err := app.New(&config.Config{
+	appInstance, err := app.New(&config.Config{
 		DatabaseURL: dbURL,
-		JWTSecret:   "test",
+		JWTSecret:   []byte("test"),
 	}, ai)
 	if err != nil {
 		t.Fatalf("setup app: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { appInstance.Close() })
 
-	srv := httptest.NewServer(router)
-	t.Cleanup(srv.Close)
+	var srv *httptest.Server
+	appInstance.Listen(func(_ uint16, router http.Handler) error {
+		srv = httptest.NewServer(router)
+		t.Cleanup(srv.Close)
+		return nil
+	})
 
 	// prepare a default user for convenience
 	hashed, _ := bcrypt.GenerateFromPassword([]byte("pw"), bcrypt.DefaultCost)
-	_, err = conn.Exec(`INSERT INTO users(email, password_hash, created_at, updated_at) VALUES($1,$2,now(),now())`,
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`INSERT INTO users(email, password_hash, created_at, updated_at) VALUES($1,$2,now(),now())`,
 		"user@example.com", string(hashed))
 	if err != nil {
 		t.Fatalf("insert user: %v", err)

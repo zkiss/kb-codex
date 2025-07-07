@@ -31,7 +31,7 @@ func TestLoadFromEnvVars(t *testing.T) {
 	cfg, _ := Load()
 
 	assert.Equal(t, "postgres://user:pass@localhost:5432/dbname", cfg.DatabaseURL)
-	assert.Equal(t, "supersecretjwt", cfg.JWTSecret)
+	assert.Equal(t, []byte("supersecretjwt"), cfg.JWTSecret)
 	assert.Equal(t, "openai-key-123", cfg.OpenAIAPIKey)
 }
 

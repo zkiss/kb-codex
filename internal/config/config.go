@@ -7,9 +7,9 @@ import (
 
 // Config holds configuration settings for the application.
 type Config struct {
-	Port         string
+	Port         uint16
 	DatabaseURL  string
-	JWTSecret    string
+	JWTSecret    []byte
 	OpenAIAPIKey string
 }
 
@@ -37,10 +37,17 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("OPENAI_API_KEY environment variable is required but not set")
 	}
 
+	// Convert port from string to uint16
+	var portUint uint16
+	_, err := fmt.Sscanf(port, "%d", &portUint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PORT value: %v", err)
+	}
+
 	return &Config{
-		Port:         port,
+		Port:         portUint,
 		DatabaseURL:  dbURL,
-		JWTSecret:    jwtSecret,
+		JWTSecret:    []byte(jwtSecret),
 		OpenAIAPIKey: openAIKey,
 	}, nil
 }
