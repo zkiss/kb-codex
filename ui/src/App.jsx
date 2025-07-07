@@ -1,6 +1,6 @@
-const { useState, useEffect } = React;
-const { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useParams } =
-  ReactRouterDOM;
+import React, { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useParams } from "react-router-dom";
+import { marked } from "marked";
 
 function Login({ onLogin }) {
   const navigate = useNavigate();
@@ -482,4 +482,5 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+export default App;
