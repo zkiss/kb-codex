@@ -17,11 +17,7 @@ func main() {
 	}
 
 	openaiClient := go_openai.NewClient(cfg.OpenAIAPIKey)
-	dbConn, router, err := app.New(app.Dependencies{
-		DatabaseURL: cfg.DatabaseURL,
-		JWTSecret:   []byte(cfg.JWTSecret),
-		AIClient:    openaiClient,
-	})
+	dbConn, router, err := app.New(cfg, openaiClient)
 	if err != nil {
 		log.Fatalf("could not set up app: %v", err)
 	}

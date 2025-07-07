@@ -7,30 +7,21 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/zkiss/kb-codex/internal/config"
 	"github.com/zkiss/kb-codex/internal/db"
 	"github.com/zkiss/kb-codex/internal/handlers"
 )
 
-// Dependencies holds the runtime dependencies required to build the HTTP server.
-type Dependencies struct {
-	// DatabaseURL is the postgres connection string.
-	DatabaseURL string
-	// JWTSecret is used for signing auth tokens.
-	JWTSecret []byte
-	// AIClient provides embedding and completion APIs.
-	AIClient handlers.AIClient
-}
-
 // New initializes the database, applies migrations and returns the DB connection
 // and router ready to be served.
-func New(deps Dependencies) (*sql.DB, http.Handler, error) {
-	conn, err := db.ConnectAndMigrate(deps.DatabaseURL)
+func New(cfg *config.Config, aiClient handlers.AIClient) (*sql.DB, http.Handler, error) {
+	conn, err := db.ConnectAndMigrate(cfg.DatabaseURL)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	authHandler := handlers.NewAuthHandler(conn, deps.JWTSecret)
-	kbHandler := handlers.NewKBHandler(conn, deps.AIClient)
+	authHandler := handlers.NewAuthHandler(conn, []byte(cfg.JWTSecret))
+	kbHandler := handlers.NewKBHandler(conn, aiClient)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

@@ -18,6 +18,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/zkiss/kb-codex/internal/app"
+	"github.com/zkiss/kb-codex/internal/config"
 	"github.com/zkiss/kb-codex/internal/handlers"
 )
 
@@ -46,11 +47,10 @@ func setupApp(t *testing.T) *testApp {
 	}
 
 	ai := &fakeAI{emb: make([]float32, 1536)}
-	conn, router, err := app.New(app.Dependencies{
+	conn, router, err := app.New(&config.Config{
 		DatabaseURL: dbURL,
-		JWTSecret:   []byte("test"),
-		AIClient:    ai,
-	})
+		JWTSecret:   "test",
+	}, ai)
 	if err != nil {
 		t.Fatalf("setup app: %v", err)
 	}
