@@ -1,0 +1,11 @@
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.bg-gradient {
+  background: linear-gradient(to bottom right, #f8f9fa, #e9ecef);
+}
+
+.card {
+  border-radius: 0.75rem;
+}
