@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -28,8 +29,16 @@ type testApp struct {
 	ai  *fakeAI
 }
 
+func requireDocker(t *testing.T) {
+	t.Helper()
+	if v := os.Getenv("SKIP_CONTAINER_TESTS"); strings.ToLower(v) == "1" || strings.ToLower(v) == "true" {
+		t.Skip("skipping container-based tests because SKIP_CONTAINER_TESTS is set")
+	}
+}
+
 func setupApp(t *testing.T) *testApp {
 	t.Helper()
+	requireDocker(t)
 	ctx := context.Background()
 	pg, err := postgres.Run(ctx, "pgvector/pgvector:pg17",
 		postgres.WithDatabase("postgres"),
