@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/zkiss/kb-codex/internal/app"
 	"github.com/zkiss/kb-codex/internal/config"
 	"github.com/zkiss/kb-codex/internal/handlers"
+	"github.com/zkiss/kb-codex/internal/testutil"
 )
 
 type testApp struct {
@@ -29,16 +29,9 @@ type testApp struct {
 	ai  *fakeAI
 }
 
-func requireDocker(t *testing.T) {
-	t.Helper()
-	if v := os.Getenv("SKIP_CONTAINER_TESTS"); strings.ToLower(v) == "1" || strings.ToLower(v) == "true" {
-		t.Skip("skipping container-based tests because SKIP_CONTAINER_TESTS is set")
-	}
-}
-
 func setupApp(t *testing.T) *testApp {
 	t.Helper()
-	requireDocker(t)
+	testutil.RequireDocker(t)
 	ctx := context.Background()
 	pg, err := postgres.Run(ctx, "pgvector/pgvector:pg17",
 		postgres.WithDatabase("postgres"),

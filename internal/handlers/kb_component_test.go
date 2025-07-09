@@ -7,21 +7,20 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"strings"
 	"testing"
 
 	go_openai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	
+	"github.com/zkiss/kb-codex/internal/testutil"
 )
 
 // helper to start a postgres container with a simplified schema
 func setupVectorDB(t *testing.T, dim int) (*postgres.PostgresContainer, *sql.DB) {
 	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not available")
-	}
+	testutil.RequireDocker(t)
 	ctx := context.Background()
 	pg, err := postgres.Run(ctx, "pgvector/pgvector:pg17",
 		postgres.WithDatabase("postgres"),
