@@ -186,6 +186,7 @@ function KBDetail({ onLogout }) {
           </div>
           <div className="input-group mb-3">
             <input
+              aria-label="Your question"
               ref={inputRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -224,12 +225,13 @@ function KBDetail({ onLogout }) {
           </ul>
           <div className="input-group">
             <input
+              data-testid="file-input"
               type="file"
               className="form-control"
               accept=".txt,.md"
               onChange={(e) => setSelectedFile(e.target.files[0])}
             />
-            <button className="btn btn-primary" onClick={uploadFile}>
+            <button data-testid="upload-btn" className="btn btn-primary" onClick={uploadFile}>
               Upload
             </button>
           </div>

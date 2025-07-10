@@ -51,6 +51,7 @@ function KBList({ onLogout }) {
       >
         <div className="col-auto flex-grow-1">
           <input
+            aria-label="New knowledge base name"
             value={newKBName}
             onChange={(e) => setNewKBName(e.target.value)}
             type="text"

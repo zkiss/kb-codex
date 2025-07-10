@@ -18,5 +18,10 @@ export default defineConfig(({ command }) => {
           emptyOutDir: true,
         }
       : {},
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: './setupTests.js'
+    },
   };
 });
