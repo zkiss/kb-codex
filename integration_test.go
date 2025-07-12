@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -141,4 +143,53 @@ func TestQnAAPI(t *testing.T) {
 	var ans map[string]any
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&ans))
 	assert.Equal(t, "ok", ans["answer"])
+}
+
+func TestPDFUploadDownloadRoundtrip(t *testing.T) {
+	app := setupApp(t)
+
+	// create KB
+	resp, err := http.Post(app.srv.URL+"/api/kbs", "application/json", strings.NewReader(`{"name":"demo"}`))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var kb handlers.KB
+	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&kb))
+
+	// read PDF file from testdata
+	pdfPath := "internal/handlers/testdata/pdf_test.pdf"
+	validPDF, err := os.ReadFile(pdfPath)
+	assert.NoError(t, err)
+
+	// upload PDF file
+	var pdfBuf bytes.Buffer
+	pdfMw := multipart.NewWriter(&pdfBuf)
+	pdfFw, _ := pdfMw.CreateFormFile("file", "test.pdf")
+	pdfFw.Write(validPDF)
+	pdfMw.Close()
+	pdfReq, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/kbs/%d/files", app.srv.URL, kb.ID), &pdfBuf)
+	pdfReq.Header.Set("Content-Type", pdfMw.FormDataContentType())
+	pdfResp, err := http.DefaultClient.Do(pdfReq)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, pdfResp.StatusCode)
+
+	// roundtrip: download the PDF and compare bytes
+	resp, err = http.Get(fmt.Sprintf("%s/api/kbs/%d/files", app.srv.URL, kb.ID))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var files []struct{ Name, Slug string }
+	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&files))
+	var slug string
+	for _, f := range files {
+		if f.Name == "test.pdf" {
+			slug = f.Slug
+		}
+	}
+	assert.NotEmpty(t, slug)
+
+	dlResp, err := http.Get(fmt.Sprintf("%s/api/kbs/%d/files/%s", app.srv.URL, kb.ID, slug))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, dlResp.StatusCode)
+	dlBytes, err := io.ReadAll(dlResp.Body)
+	assert.NoError(t, err)
+	assert.Equal(t, validPDF, dlBytes)
 }

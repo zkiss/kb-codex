@@ -16,6 +16,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	go_openai "github.com/sashabaranov/go-openai"
 
+	"bytes"
+
+	pdf "github.com/ledongthuc/pdf"
 	"github.com/zkiss/kb-codex/internal/utils"
 )
 
@@ -159,6 +162,7 @@ func (h *KBHandler) GetFile(w http.ResponseWriter, r *http.Request) {
 			mimeType = "text/plain; charset=utf-8"
 		}
 	}
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+fileName+"\"")
 	w.Header().Set("Content-Type", mimeType)
 	w.Write(content)
 }
@@ -179,8 +183,8 @@ func (h *KBHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".txt" && ext != ".md" {
-		http.Error(w, "only .txt and .md files are supported", http.StatusBadRequest)
+	if ext != ".txt" && ext != ".md" && ext != ".pdf" {
+		http.Error(w, "only .txt, .md, and .pdf files are supported", http.StatusBadRequest)
 		return
 	}
 	contentBytes, err := io.ReadAll(file)
@@ -188,7 +192,18 @@ func (h *KBHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read file", http.StatusInternalServerError)
 		return
 	}
-	contentStr := string(contentBytes)
+	var contentStr string
+	if ext == ".pdf" {
+		// Extract text from PDF
+		pdfText, err := extractTextFromPDF(contentBytes)
+		if err != nil {
+			http.Error(w, "could not extract text from PDF: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		contentStr = pdfText
+	} else {
+		contentStr = string(contentBytes)
+	}
 	mimeType := header.Header.Get("Content-Type")
 	if mimeType == "" {
 		mimeType = mime.TypeByExtension(ext)
@@ -370,4 +385,27 @@ func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(questionResponse{Answer: answer, Chunks: chunks})
+}
+
+// extractTextFromPDF extracts text from a PDF file given as []byte.
+func extractTextFromPDF(data []byte) (string, error) {
+	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", err
+	}
+	var buf strings.Builder
+	// Iterate through all pages
+	for i := 1; i <= r.NumPage(); i++ {
+		page := r.Page(i)
+		if page.V.IsNull() {
+			continue
+		}
+		content, err := page.GetPlainText(nil)
+		if err != nil {
+			return "", err
+		}
+		buf.WriteString(content)
+		buf.WriteString("\n")
+	}
+	return buf.String(), nil
 }

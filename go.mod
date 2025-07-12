@@ -1,6 +1,8 @@
 module github.com/zkiss/kb-codex
 
-go 1.24
+go 1.24.1
+
+toolchain go1.24.4
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
@@ -38,6 +40,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

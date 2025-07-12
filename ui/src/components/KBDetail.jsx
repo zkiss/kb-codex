@@ -70,7 +70,12 @@ function KBDetail({ onLogout }) {
     );
     if (res.ok) {
       const mimeType = res.headers.get("Content-Type") || "";
-      const content = await res.text();
+      let content;
+      if (mimeType.startsWith("application/pdf")) {
+        content = await res.arrayBuffer();
+      } else {
+        content = await res.text();
+      }
       setViewFile({ name: file.name, content, mimeType });
     }
   };
@@ -228,7 +233,7 @@ function KBDetail({ onLogout }) {
               data-testid="file-input"
               type="file"
               className="form-control"
-              accept=".txt,.md"
+              accept=".txt,.md,.pdf"
               onChange={(e) => setSelectedFile(e.target.files[0])}
             />
             <button data-testid="upload-btn" className="btn btn-primary" onClick={uploadFile}>

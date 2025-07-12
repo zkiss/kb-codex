@@ -13,7 +13,11 @@ import (
 	go_openai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	
+
+	"os"
+
+	"github.com/go-chi/chi/v5"
+	_ "github.com/lib/pq"
 	"github.com/zkiss/kb-codex/internal/testutil"
 )
 
@@ -26,6 +30,7 @@ func setupVectorDB(t *testing.T, dim int) (*postgres.PostgresContainer, *sql.DB)
 		postgres.WithDatabase("postgres"),
 		postgres.WithUsername("demo"),
 		postgres.WithPassword("demo_pw"),
+		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		t.Fatalf("starting postgres: %v", err)
@@ -39,6 +44,11 @@ func setupVectorDB(t *testing.T, dim int) (*postgres.PostgresContainer, *sql.DB)
 	if err != nil {
 		pg.Terminate(ctx)
 		t.Fatalf("open db: %v", err)
+	}
+	// Enable pgvector extension
+	if _, err := db.Exec(`CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
+		pg.Terminate(ctx)
+		t.Fatalf("enable pgvector: %v", err)
 	}
 	schema := fmt.Sprintf(`CREATE TABLE knowledge_bases(id SERIAL PRIMARY KEY, name TEXT);
 CREATE TABLE chunks(id SERIAL PRIMARY KEY, kb_id INTEGER, file_name TEXT, chunk_index INTEGER, content TEXT, embedding VECTOR(%d));`, dim)
@@ -105,6 +115,9 @@ func TestAskQuestionComponent(t *testing.T) {
 	h := NewKBHandler(db, ai)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/kbs/%d/ask", kbID), strings.NewReader(`{"question":"q"}`))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("kbID", fmt.Sprint(kbID))
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	rr := httptest.NewRecorder()
 	h.AskQuestion(rr, req)
 
@@ -135,10 +148,24 @@ func TestAskQuestionFollowup(t *testing.T) {
 
 	body := `{"question":"follow?","history":[{"role":"user","content":"first"},{"role":"assistant","content":"a1"}]}`
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/kbs/%d/ask", kbID), strings.NewReader(body))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("kbID", fmt.Sprint(kbID))
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	rr := httptest.NewRecorder()
 	h.AskQuestion(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.True(t, ai.rewriteCalled, "rewrite should be called")
 	assert.Equal(t, "rewritten", ai.lastEmbInput)
+}
+
+func TestExtractTextFromPDF(t *testing.T) {
+	// Minimal PDF with the text 'Hello PDF'
+	pdfBytes, err := os.ReadFile("testdata/pdf_test.pdf")
+	if err != nil {
+		t.Fatalf("failed to read test PDF: %v", err)
+	}
+	text, err := extractTextFromPDF(pdfBytes)
+	assert.NoError(t, err)
+	assert.Contains(t, text, "pdf test")
 }

@@ -48,6 +48,33 @@ describe('KBDetail', () => {
     });
   });
 
+  it('uploads PDF file', async () => {
+    fetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([{ id: 1, name: 'KB1' }]) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+
+    const utils = render(<KBDetail onLogout={() => {}} />);
+    rerender = utils.rerender;
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+
+    const pdfFile = new File(['%PDF-1.1'], 'test.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByTestId('file-input'), { target: { files: [pdfFile] } });
+
+    fetch
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([{ slug: 'test.pdf', name: 'test.pdf' }]) });
+
+    fireEvent.click(screen.getByTestId('upload-btn'));
+
+    await waitFor(() => {
+      const call = fetch.mock.calls.find(c => c[0] === '/api/kbs/1/files' && c[1]?.method === 'POST');
+      expect(call).toBeDefined();
+      expect(call[1].body).toBeInstanceOf(FormData);
+      expect(call[1].body.get('file')).toBe(pdfFile);
+    });
+  });
+
   it('starts new chat and renders answer', async () => {
     fetch
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([{ id: 1, name: 'KB1' }]) })

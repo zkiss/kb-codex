@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { marked } from "marked";
 
-function renderContent(mimeType, content) {
+function renderContent(mimeType, content, file) {
   if (mimeType.startsWith("text/plain")) {
     return <pre className="mt-2">{content}</pre>;
   }
@@ -11,6 +11,21 @@ function renderContent(mimeType, content) {
         className="mt-2"
         dangerouslySetInnerHTML={{ __html: marked.parse(content) }}
       ></div>
+    );
+  }
+  if (mimeType.startsWith("application/pdf")) {
+    // Create a Blob URL for the PDF content
+    const blob = new Blob([
+      content instanceof ArrayBuffer ? content : new TextEncoder().encode(content)
+    ], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    return (
+      <div className="mt-2">
+        <iframe src={url} width="100%" height="600px" title="PDF Viewer" />
+        <div>
+          <a href={url} download={file.name} rel="noopener noreferrer">Download PDF</a>
+        </div>
+      </div>
     );
   }
   return <p className="mt-2">Unsupported file type</p>;
@@ -41,7 +56,7 @@ export default function FileViewer({ file, onClose }) {
               <button type="button" className="btn-close" onClick={onClose}></button>
             </div>
             <div className="modal-body">
-              {renderContent(file.mimeType, file.content)}
+              {renderContent(file.mimeType, file.content, file)}
             </div>
           </div>
         </div>
