@@ -14,7 +14,7 @@ export default defineConfig(({ command }) => {
     base: isBuild ? '/static/' : '/',
     build: isBuild
       ? {
-          outDir: resolve(__dirname, '../static'),
+          outDir: resolve(__dirname, '../server/static'),
           emptyOutDir: true,
         }
       : {},

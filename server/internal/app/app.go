@@ -32,7 +32,7 @@ func New(cfg *config.Config, aiClient handlers.AIClient) (*App, error) {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	fs := http.FileServer(http.Dir("static"))
+	fs := http.FileServer(http.Dir("./static"))
 	r.Handle("/static/*", http.StripPrefix("/static/", fs))
 
 	r.Post("/api/register", authHandler.Register)
@@ -45,13 +45,13 @@ func New(cfg *config.Config, aiClient handlers.AIClient) (*App, error) {
 	r.Post("/api/kbs/{kbID}/ask", kbHandler.AskQuestion)
 
 	r.Get("/index.html", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/index.html")
+		http.ServeFile(w, r, "./static/index.html")
 	})
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/index.html")
+		http.ServeFile(w, r, "./static/index.html")
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/index.html")
+		http.ServeFile(w, r, "./static/index.html")
 	})
 
 	return &App{cfg: cfg, db: conn, router: r}, nil
