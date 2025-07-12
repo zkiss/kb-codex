@@ -11,7 +11,7 @@ server: server-build server-test
 
 .PHONY: client
 client:
-	cd client && npm install && npm run build
+	cd client && npm install && npm run test && npm run build
 
 .PHONY: build
 build: server client
