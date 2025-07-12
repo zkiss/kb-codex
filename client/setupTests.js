@@ -11,3 +11,6 @@ beforeEach(() => {
 global.DOMMatrix = global.DOMMatrix || class DOMMatrix {
   constructor() {}
 };
+
+global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+global.URL.revokeObjectURL = vi.fn();
