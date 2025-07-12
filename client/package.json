@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "//postinstall-comment": "postinstall needed because when running in local vite the pdf library cannot be loaded from cdn, need to locally serve instead",
+    "postinstall": "mkdir -p ./public/static && cp ./node_modules/react-pdf/node_modules/pdfjs-dist/build/pdf.worker.min.mjs ./public/static/pdf.worker.min.js"
   },
   "dependencies": {
     "marked": "^9.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-pdf": "^10.0.1",
     "react-router-dom": "^6.23.0"
   },
   "devDependencies": {
