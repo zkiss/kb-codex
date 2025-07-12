@@ -1,17 +1,20 @@
-.PHONY: server-build
-server-build:
-	cd server && go build ./...
+.PHONY: compile
+compile:
+	make -C server compile
+	make -C client compile
 
-.PHONY: server-test
-server-test:
-	cd server && go test ./...
+.PHONY: test
+test:
+	make -C server test
+	make -C client test
 
 .PHONY: server
-server: server-build server-test
+server:
+	make -C server build
 
 .PHONY: client
 client:
-	cd client && npm install && npm run test && npm run build
+	make -C client build
 
 .PHONY: build
 build: server client
