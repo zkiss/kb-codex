@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
-	"time"
 )
 
 var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -23,7 +22,6 @@ const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 // RandomString returns a random alphanumeric string of length n.
 func RandomString(n int) string {
-	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
