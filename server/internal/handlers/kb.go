@@ -42,6 +42,19 @@ func NewKBHandler(db *sql.DB, openaiClient AIClient) *KBHandler {
 	return &KBHandler{DB: db, OpenAI: openaiClient}
 }
 
+// checkKBOwnership verifies that the KB belongs to the authenticated user
+func (h *KBHandler) checkKBOwnership(kbID int64, userID int64) error {
+	var exists int
+	err := h.DB.QueryRow(`SELECT 1 FROM knowledge_bases WHERE id = $1 AND user_id = $2`, kbID, userID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("knowledge base not found or access denied")
+	}
+	if err != nil {
+		return fmt.Errorf("database error: %w", err)
+	}
+	return nil
+}
+
 // createKBRequest represents the JSON payload for creating a knowledge base.
 type createKBRequest struct {
 	Name string `json:"name"`
@@ -56,6 +69,12 @@ type KB struct {
 
 // CreateKB handles POST /api/kbs
 func (h *KBHandler) CreateKB(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.RequireUserID(r.Context())
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	var req createKBRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
@@ -63,9 +82,9 @@ func (h *KBHandler) CreateKB(w http.ResponseWriter, r *http.Request) {
 	}
 	var id int64
 	var createdAt time.Time
-	err := h.DB.QueryRow(
-		`INSERT INTO knowledge_bases(name) VALUES ($1) RETURNING id, created_at`,
-		req.Name,
+	err = h.DB.QueryRow(
+		`INSERT INTO knowledge_bases(name, user_id) VALUES ($1, $2) RETURNING id, created_at`,
+		req.Name, userID,
 	).Scan(&id, &createdAt)
 	if err != nil {
 		http.Error(w, "could not create knowledge base: "+err.Error(), http.StatusInternalServerError)
@@ -77,7 +96,13 @@ func (h *KBHandler) CreateKB(w http.ResponseWriter, r *http.Request) {
 
 // ListKB handles GET /api/kbs
 func (h *KBHandler) ListKB(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`SELECT id, name, created_at FROM knowledge_bases ORDER BY id`)
+	userID, err := utils.RequireUserID(r.Context())
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	rows, err := h.DB.Query(`SELECT id, name, created_at FROM knowledge_bases WHERE user_id = $1 ORDER BY id`, userID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
@@ -99,12 +124,25 @@ func (h *KBHandler) ListKB(w http.ResponseWriter, r *http.Request) {
 
 // ListFiles handles GET /api/kbs/{kbID}/files
 func (h *KBHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.RequireUserID(r.Context())
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	kbIDStr := chi.URLParam(r, "kbID")
 	kbID, err := strconv.ParseInt(kbIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid kb ID", http.StatusBadRequest)
 		return
 	}
+
+	// Check KB ownership
+	if err := h.checkKBOwnership(kbID, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	rows, err := h.DB.Query(
 		`SELECT file_name, lookup_name FROM files WHERE kb_id = $1 ORDER BY file_name`,
 		kbID,
@@ -134,12 +172,25 @@ func (h *KBHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 
 // GetFile handles GET /api/kbs/{kbID}/files/{slug}
 func (h *KBHandler) GetFile(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.RequireUserID(r.Context())
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	kbIDStr := chi.URLParam(r, "kbID")
 	kbID, err := strconv.ParseInt(kbIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid kb ID", http.StatusBadRequest)
 		return
 	}
+
+	// Check KB ownership
+	if err := h.checkKBOwnership(kbID, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
 	slug := chi.URLParam(r, "slug")
 	var content []byte
 	var mimeType string
@@ -169,11 +220,23 @@ func (h *KBHandler) GetFile(w http.ResponseWriter, r *http.Request) {
 
 // UploadFile handles POST /api/kbs/{kbID}/files (multipart file upload)
 func (h *KBHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.RequireUserID(r.Context())
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	r.ParseMultipartForm(10 << 20)
 	kbIDStr := chi.URLParam(r, "kbID")
 	kbID, err := strconv.ParseInt(kbIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid kb ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check KB ownership
+	if err := h.checkKBOwnership(kbID, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -307,10 +370,22 @@ func rewriteQuestion(ctx context.Context, ai AIClient, history []chatMessage, q 
 
 // AskQuestion handles POST /api/kbs/{kbID}/ask
 func (h *KBHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
+	userID, err := utils.RequireUserID(r.Context())
+	if err != nil {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	kbIDStr := chi.URLParam(r, "kbID")
 	kbID, err := strconv.ParseInt(kbIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid kb ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check KB ownership
+	if err := h.checkKBOwnership(kbID, userID); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	var req questionRequest

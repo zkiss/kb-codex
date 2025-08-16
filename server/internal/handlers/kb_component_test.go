@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "github.com/lib/pq"
 	"github.com/zkiss/kb-codex/internal/testutil"
+	"github.com/zkiss/kb-codex/internal/utils"
 )
 
 // helper to start a postgres container with a simplified schema
@@ -50,7 +51,8 @@ func setupVectorDB(t *testing.T, dim int) (*postgres.PostgresContainer, *sql.DB)
 		pg.Terminate(ctx)
 		t.Fatalf("enable pgvector: %v", err)
 	}
-	schema := fmt.Sprintf(`CREATE TABLE knowledge_bases(id SERIAL PRIMARY KEY, name TEXT);
+	schema := fmt.Sprintf(`CREATE TABLE users(id SERIAL PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ);
+CREATE TABLE knowledge_bases(id SERIAL PRIMARY KEY, name TEXT, user_id INTEGER REFERENCES users(id));
 CREATE TABLE chunks(id SERIAL PRIMARY KEY, kb_id INTEGER, file_name TEXT, chunk_index INTEGER, content TEXT, embedding VECTOR(%d));`, dim)
 	if _, err := db.Exec(schema); err != nil {
 		pg.Terminate(ctx)
@@ -96,8 +98,15 @@ func TestAskQuestionComponent(t *testing.T) {
 	defer pg.Terminate(context.Background())
 	defer db.Close()
 
+	// Create a test user
+	var userID int64
+	err := db.QueryRow(`INSERT INTO users(email, password_hash, created_at, updated_at) VALUES('test@example.com', 'hash', NOW(), NOW()) RETURNING id`).Scan(&userID)
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
 	var kbID int64
-	err := db.QueryRow(`INSERT INTO knowledge_bases(name) VALUES('kb1') RETURNING id`).Scan(&kbID)
+	err = db.QueryRow(`INSERT INTO knowledge_bases(name, user_id) VALUES('kb1', $1) RETURNING id`, userID).Scan(&kbID)
 	if err != nil {
 		t.Fatalf("insert kb: %v", err)
 	}
@@ -117,7 +126,9 @@ func TestAskQuestionComponent(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/kbs/%d/ask", kbID), strings.NewReader(`{"question":"q"}`))
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("kbID", fmt.Sprint(kbID))
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, utils.UserIDKey, userID)
+	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
 	h.AskQuestion(rr, req)
 
@@ -133,8 +144,15 @@ func TestAskQuestionFollowup(t *testing.T) {
 	defer pg.Terminate(context.Background())
 	defer db.Close()
 
+	// Create a test user
+	var userID int64
+	err := db.QueryRow(`INSERT INTO users(email, password_hash, created_at, updated_at) VALUES('test2@example.com', 'hash', NOW(), NOW()) RETURNING id`).Scan(&userID)
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
 	var kbID int64
-	err := db.QueryRow(`INSERT INTO knowledge_bases(name) VALUES('kb1') RETURNING id`).Scan(&kbID)
+	err = db.QueryRow(`INSERT INTO knowledge_bases(name, user_id) VALUES('kb1', $1) RETURNING id`, userID).Scan(&kbID)
 	if err != nil {
 		t.Fatalf("insert kb: %v", err)
 	}
@@ -150,7 +168,9 @@ func TestAskQuestionFollowup(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/kbs/%d/ask", kbID), strings.NewReader(body))
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("kbID", fmt.Sprint(kbID))
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, utils.UserIDKey, userID)
+	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
 	h.AskQuestion(rr, req)
 
