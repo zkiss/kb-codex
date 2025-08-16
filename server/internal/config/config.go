@@ -22,14 +22,12 @@ func Load() (*Config, error) {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		fmt.Println("WARNING: DATABASE_URL is not set. Using default postgres connection")
-		dbURL = "postgres://demo:demo_pw@localhost:5432/postgres?sslmode=disable"
+		return nil, fmt.Errorf("DATABASE_URL environment variable is required but not set")
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		fmt.Println("WARNING: JWT_SECRET is not set. Using insecure default secret")
-		jwtSecret = "secret"
+		return nil, fmt.Errorf("JWT_SECRET environment variable is required but not set")
 	}
 
 	openAIKey := os.Getenv("OPENAI_API_KEY")
@@ -41,7 +39,7 @@ func Load() (*Config, error) {
 	var portUint uint16
 	_, err := fmt.Sscanf(port, "%d", &portUint)
 	if err != nil {
-		return nil, fmt.Errorf("invalid PORT value: %v", err)
+		return nil, fmt.Errorf("invalid PORT value '%s': %v", port, err)
 	}
 
 	return &Config{
