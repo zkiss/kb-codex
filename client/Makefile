@@ -3,7 +3,7 @@ setup:
 	npm install
 
 .PHONY: compile
-compile: setup
+compile:
 	npm run build
 
 .PHONY: test

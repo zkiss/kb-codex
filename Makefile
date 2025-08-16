@@ -1,3 +1,7 @@
+.PHONY: setup
+setup:
+	make -C client setup
+
 .PHONY: compile
 compile:
 	make -C server compile
