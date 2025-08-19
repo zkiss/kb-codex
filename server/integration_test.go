@@ -103,14 +103,12 @@ func (app *testApp) createUserAndToken(t *testing.T, email, password string) *te
 
 	// Register user
 	regBody := strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, password))
-	resp, err := http.Post(app.srv.URL+"/api/register", "application/json", regBody)
-	assert.NoError(t, err)
+	resp := app.makeRequest(t, "POST", "/api/register", nil, regBody)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	// Login to get token
 	loginBody := strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, password))
-	resp, err = http.Post(app.srv.URL+"/api/login", "application/json", loginBody)
-	assert.NoError(t, err)
+	resp = app.makeRequest(t, "POST", "/api/login", nil, loginBody)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var loginData map[string]string
@@ -125,13 +123,8 @@ func (app *testApp) createUserAndToken(t *testing.T, email, password string) *te
 func (app *testApp) createKB(t *testing.T, user *testUser, name string) *testKB {
 	t.Helper()
 
-	kbReq, err := http.NewRequest("POST", app.srv.URL+"/api/kbs", strings.NewReader(fmt.Sprintf(`{"name":"%s"}`, name)))
-	assert.NoError(t, err)
-	kbReq.Header.Set("Content-Type", "application/json")
-	kbReq.Header.Set("Authorization", "Bearer "+user.Token)
-
-	resp, err := http.DefaultClient.Do(kbReq)
-	assert.NoError(t, err)
+	body := strings.NewReader(fmt.Sprintf(`{"name":"%s"}`, name))
+	resp := app.makeRequest(t, "POST", "/api/kbs", user, body)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var kb handlers.KB
@@ -144,13 +137,8 @@ func (app *testApp) createKB(t *testing.T, user *testUser, name string) *testKB 
 func (app *testApp) askQuestion(t *testing.T, kb *testKB, question string) map[string]interface{} {
 	t.Helper()
 
-	questionReq, err := http.NewRequest("POST", fmt.Sprintf("%s/api/kbs/%d/ask", app.srv.URL, kb.ID), strings.NewReader(fmt.Sprintf(`{"question":"%s"}`, question)))
-	assert.NoError(t, err)
-	questionReq.Header.Set("Content-Type", "application/json")
-	questionReq.Header.Set("Authorization", "Bearer "+kb.User.Token)
-
-	resp, err := http.DefaultClient.Do(questionReq)
-	assert.NoError(t, err)
+	body := strings.NewReader(fmt.Sprintf(`{"question":"%s"}`, question))
+	resp := app.makeRequest(t, "POST", fmt.Sprintf("/api/kbs/%d/ask", kb.ID), kb.User, body)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var answer map[string]interface{}
@@ -168,18 +156,17 @@ func (app *testApp) uploadFile(t *testing.T, kb *testKB, filename string, conten
 	fw.Write(content)
 	mw.Close()
 
-	uploadReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/kbs/%d/files", app.srv.URL, kb.ID), &buf)
-	assert.NoError(t, err)
-	uploadReq.Header.Set("Content-Type", mw.FormDataContentType())
-	uploadReq.Header.Set("Authorization", "Bearer "+kb.User.Token)
-
-	resp, err := http.DefaultClient.Do(uploadReq)
-	assert.NoError(t, err)
+	resp := app.makeRequestWithContentType(t, "POST", fmt.Sprintf("/api/kbs/%d/files", kb.ID), kb.User, &buf, mw.FormDataContentType())
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 // makeRequest makes an HTTP request, optionally with authentication
 func (app *testApp) makeRequest(t *testing.T, method, path string, user *testUser, body io.Reader) *http.Response {
+	return app.makeRequestWithContentType(t, method, path, user, body, "application/json")
+}
+
+// makeRequestWithContentType makes an HTTP request with custom content type
+func (app *testApp) makeRequestWithContentType(t *testing.T, method, path string, user *testUser, body io.Reader, contentType string) *http.Response {
 	t.Helper()
 
 	req, err := http.NewRequest(method, app.srv.URL+path, body)
@@ -190,8 +177,8 @@ func (app *testApp) makeRequest(t *testing.T, method, path string, user *testUse
 		req.Header.Set("Authorization", "Bearer "+user.Token)
 	}
 
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if body != nil && contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
