@@ -10,6 +10,7 @@ import (
 	"github.com/zkiss/kb-codex/internal/config"
 	"github.com/zkiss/kb-codex/internal/db"
 	"github.com/zkiss/kb-codex/internal/handlers"
+	"github.com/zkiss/kb-codex/internal/utils"
 )
 
 // App encapsulates the application state and logic.
@@ -32,17 +33,22 @@ func New(cfg *config.Config, aiClient handlers.AIClient) (*App, error) {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	fs := http.FileServer(http.Dir("./static"))
-	r.Handle("/static/*", http.StripPrefix("/static/", fs))
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
+	// Public routes (no authentication required)
 	r.Post("/api/register", authHandler.Register)
 	r.Post("/api/login", authHandler.Login)
-	r.Get("/api/kbs", kbHandler.ListKB)
-	r.Post("/api/kbs", kbHandler.CreateKB)
-	r.Get("/api/kbs/{kbID}/files", kbHandler.ListFiles)
-	r.Get("/api/kbs/{kbID}/files/{slug}", kbHandler.GetFile)
-	r.Post("/api/kbs/{kbID}/files", kbHandler.UploadFile)
-	r.Post("/api/kbs/{kbID}/ask", kbHandler.AskQuestion)
+
+	// Protected routes (authentication required)
+	r.Group(func(r chi.Router) {
+		r.Use(utils.AuthMiddleware(cfg.JWTSecret))
+		r.Get("/api/kbs", kbHandler.ListKB)
+		r.Post("/api/kbs", kbHandler.CreateKB)
+		r.Get("/api/kbs/{kbID}/files", kbHandler.ListFiles)
+		r.Get("/api/kbs/{kbID}/files/{slug}", kbHandler.GetFile)
+		r.Post("/api/kbs/{kbID}/files", kbHandler.UploadFile)
+		r.Post("/api/kbs/{kbID}/ask", kbHandler.AskQuestion)
+	})
 
 	r.Get("/index.html", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./static/index.html")

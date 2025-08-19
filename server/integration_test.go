@@ -31,6 +31,19 @@ type testApp struct {
 	ai  *fakeAI
 }
 
+// testUser represents a user with their authentication token
+type testUser struct {
+	Email string
+	Token string
+}
+
+// testKB represents a knowledge base created by a user
+type testKB struct {
+	ID   int64
+	Name string
+	User *testUser
+}
+
 func setupApp(t *testing.T) *testApp {
 	t.Helper()
 	testutil.RequireDocker(t)
@@ -84,20 +97,99 @@ func setupApp(t *testing.T) *testApp {
 	return &testApp{srv: srv, ai: ai}
 }
 
-func TestAuthAPI(t *testing.T) {
-	app := setupApp(t)
-	regBody := strings.NewReader(`{"email":"u@example.com","password":"pw"}`)
-	resp, err := http.Post(app.srv.URL+"/api/register", "application/json", regBody)
-	assert.NoError(t, err)
+// createUserAndToken creates a new user and returns their authentication token
+func (app *testApp) createUserAndToken(t *testing.T, email, password string) *testUser {
+	t.Helper()
+
+	// Register user
+	regBody := strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, password))
+	resp := app.makeRequest(t, "POST", "/api/register", nil, regBody)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	loginBody := strings.NewReader(`{"email":"u@example.com","password":"pw"}`)
-	resp, err = http.Post(app.srv.URL+"/api/login", "application/json", loginBody)
-	assert.NoError(t, err)
+	// Login to get token
+	loginBody := strings.NewReader(fmt.Sprintf(`{"email":"%s","password":"%s"}`, email, password))
+	resp = app.makeRequest(t, "POST", "/api/login", nil, loginBody)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	var data map[string]string
-	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
-	assert.NotEmpty(t, data["token"])
+
+	var loginData map[string]string
+	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&loginData))
+	token := loginData["token"]
+	assert.NotEmpty(t, token)
+
+	return &testUser{Email: email, Token: token}
+}
+
+// createKB creates a knowledge base for a user and returns it
+func (app *testApp) createKB(t *testing.T, user *testUser, name string) *testKB {
+	t.Helper()
+
+	body := strings.NewReader(fmt.Sprintf(`{"name":"%s"}`, name))
+	resp := app.makeRequest(t, "POST", "/api/kbs", user, body)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var kb handlers.KB
+	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&kb))
+
+	return &testKB{ID: kb.ID, Name: name, User: user}
+}
+
+// askQuestion asks a question on a knowledge base and returns the response
+func (app *testApp) askQuestion(t *testing.T, kb *testKB, question string) map[string]interface{} {
+	t.Helper()
+
+	body := strings.NewReader(fmt.Sprintf(`{"question":"%s"}`, question))
+	resp := app.makeRequest(t, "POST", fmt.Sprintf("/api/kbs/%d/ask", kb.ID), kb.User, body)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var answer map[string]interface{}
+	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&answer))
+	return answer
+}
+
+// uploadFile uploads a file to a knowledge base
+func (app *testApp) uploadFile(t *testing.T, kb *testKB, filename string, content []byte) {
+	t.Helper()
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("file", filename)
+	fw.Write(content)
+	mw.Close()
+
+	resp := app.makeRequestWithContentType(t, "POST", fmt.Sprintf("/api/kbs/%d/files", kb.ID), kb.User, &buf, mw.FormDataContentType())
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+// makeRequest makes an HTTP request, optionally with authentication
+func (app *testApp) makeRequest(t *testing.T, method, path string, user *testUser, body io.Reader) *http.Response {
+	return app.makeRequestWithContentType(t, method, path, user, body, "application/json")
+}
+
+// makeRequestWithContentType makes an HTTP request with custom content type
+func (app *testApp) makeRequestWithContentType(t *testing.T, method, path string, user *testUser, body io.Reader, contentType string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(method, app.srv.URL+path, body)
+	assert.NoError(t, err)
+
+	// Add authentication if user is provided
+	if user != nil {
+		req.Header.Set("Authorization", "Bearer "+user.Token)
+	}
+
+	if body != nil && contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	return resp
+}
+
+func TestAuthAPI(t *testing.T) {
+	app := setupApp(t)
+	user := app.createUserAndToken(t, "u@example.com", "pw")
+	assert.NotEmpty(t, user.Token)
 }
 
 type fakeAI struct {
@@ -117,65 +209,37 @@ func (f *fakeAI) CreateChatCompletion(ctx context.Context, req go_openai.ChatCom
 func TestQnAAPI(t *testing.T) {
 	app := setupApp(t)
 
-	// create KB
-	resp, err := http.Post(app.srv.URL+"/api/kbs", "application/json", strings.NewReader(`{"name":"demo"}`))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	var kb handlers.KB
-	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&kb))
+	// Create user and knowledge base
+	user := app.createUserAndToken(t, "test@example.com", "password")
+	kb := app.createKB(t, user, "demo")
 
-	// upload file
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	fw, _ := mw.CreateFormFile("file", "a.txt")
-	fw.Write([]byte("hello world"))
-	mw.Close()
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/kbs/%d/files", app.srv.URL, kb.ID), &buf)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	resp, err = http.DefaultClient.Do(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	// Upload file
+	app.uploadFile(t, kb, "a.txt", []byte("hello world"))
 
-	// ask question
-	resp, err = http.Post(fmt.Sprintf("%s/api/kbs/%d/ask", app.srv.URL, kb.ID), "application/json", strings.NewReader(`{"question":"hi"}`))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	var ans map[string]any
-	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&ans))
-	assert.Equal(t, "ok", ans["answer"])
+	// Ask question
+	answer := app.askQuestion(t, kb, "hi")
+	assert.Equal(t, "ok", answer["answer"])
 }
 
 func TestPDFUploadDownloadRoundtrip(t *testing.T) {
 	app := setupApp(t)
 
-	// create KB
-	resp, err := http.Post(app.srv.URL+"/api/kbs", "application/json", strings.NewReader(`{"name":"demo"}`))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	var kb handlers.KB
-	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&kb))
+	// Create user and knowledge base
+	user := app.createUserAndToken(t, "pdf@example.com", "password")
+	kb := app.createKB(t, user, "demo")
 
-	// read PDF file from testdata
+	// Read PDF file from testdata
 	pdfPath := "internal/handlers/testdata/pdf_test.pdf"
 	validPDF, err := os.ReadFile(pdfPath)
 	assert.NoError(t, err)
 
-	// upload PDF file
-	var pdfBuf bytes.Buffer
-	pdfMw := multipart.NewWriter(&pdfBuf)
-	pdfFw, _ := pdfMw.CreateFormFile("file", "test.pdf")
-	pdfFw.Write(validPDF)
-	pdfMw.Close()
-	pdfReq, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/kbs/%d/files", app.srv.URL, kb.ID), &pdfBuf)
-	pdfReq.Header.Set("Content-Type", pdfMw.FormDataContentType())
-	pdfResp, err := http.DefaultClient.Do(pdfReq)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, pdfResp.StatusCode)
+	// Upload PDF file
+	app.uploadFile(t, kb, "test.pdf", validPDF)
 
-	// roundtrip: download the PDF and compare bytes
-	resp, err = http.Get(fmt.Sprintf("%s/api/kbs/%d/files", app.srv.URL, kb.ID))
-	assert.NoError(t, err)
+	// Download the PDF and compare bytes
+	resp := app.makeRequest(t, "GET", fmt.Sprintf("/api/kbs/%d/files", kb.ID), user, nil)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
 	var files []struct{ Name, Slug string }
 	assert.NoError(t, json.NewDecoder(resp.Body).Decode(&files))
 	var slug string
@@ -186,10 +250,54 @@ func TestPDFUploadDownloadRoundtrip(t *testing.T) {
 	}
 	assert.NotEmpty(t, slug)
 
-	dlResp, err := http.Get(fmt.Sprintf("%s/api/kbs/%d/files/%s", app.srv.URL, kb.ID, slug))
-	assert.NoError(t, err)
+	// Download the actual file
+	dlResp := app.makeRequest(t, "GET", fmt.Sprintf("/api/kbs/%d/files/%s", kb.ID, slug), user, nil)
 	assert.Equal(t, http.StatusOK, dlResp.StatusCode)
 	dlBytes, err := io.ReadAll(dlResp.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, validPDF, dlBytes)
+}
+
+func TestUnauthenticatedAccess(t *testing.T) {
+	app := setupApp(t)
+
+	// Create user and knowledge base
+	user := app.createUserAndToken(t, "auth@example.com", "password")
+	kb := app.createKB(t, user, "test-kb")
+
+	// Test unauthenticated access to various endpoints
+	resp := app.makeRequest(t, "GET", "/api/kbs", nil, nil)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "list KBs without auth")
+
+	resp = app.makeRequest(t, "POST", "/api/kbs", nil, strings.NewReader(`{"name":"unauthorized"}`))
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "create KB without auth")
+
+	resp = app.makeRequest(t, "GET", fmt.Sprintf("/api/kbs/%d/files", kb.ID), nil, nil)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "list files without auth")
+
+	resp = app.makeRequest(t, "POST", fmt.Sprintf("/api/kbs/%d/ask", kb.ID), nil, strings.NewReader(`{"question":"test"}`))
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "ask question without auth")
+}
+
+func TestCrossUserAccess(t *testing.T) {
+	app := setupApp(t)
+
+	// Create first user and KB
+	user1 := app.createUserAndToken(t, "user1@example.com", "password")
+	kb1 := app.createKB(t, user1, "user1-kb")
+
+	// Create second user
+	user2 := app.createUserAndToken(t, "user2@example.com", "password")
+
+	// Test that user2 cannot access user1's KB
+	resp := app.makeRequest(t, "GET", fmt.Sprintf("/api/kbs/%d/files", kb1.ID), user2, nil)
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "user2 cannot list user1's files")
+
+	resp2 := app.makeRequest(t, "POST", fmt.Sprintf("/api/kbs/%d/ask", kb1.ID), user2, strings.NewReader(`{"question":"test"}`))
+	assert.Equal(t, http.StatusForbidden, resp2.StatusCode, "user2 cannot ask questions on user1's KB")
+
+	// Verify that user2 can access their own KB (should work)
+	kb2 := app.createKB(t, user2, "user2-kb")
+	resp3 := app.makeRequest(t, "GET", fmt.Sprintf("/api/kbs/%d/files", kb2.ID), user2, nil)
+	assert.Equal(t, http.StatusOK, resp3.StatusCode)
 }
